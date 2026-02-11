@@ -1,0 +1,657 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Retro Ski - Championship Edition</title>
+    <style>
+        body {
+            background-color: #2b2b36;
+            color: #fff;
+            font-family: 'Courier New', Courier, monospace;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            image-rendering: pixelated; 
+            image-rendering: crisp-edges;
+        }
+
+        canvas {
+            background-color: #f0f8ff;
+            width: 480px; 
+            height: 640px;
+            image-rendering: pixelated;
+            border: 4px solid #fff;
+            border-radius: 4px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+        }
+
+        .instructions {
+            margin-top: 15px;
+            text-align: center;
+            font-size: 14px;
+            color: #aaa;
+            line-height: 1.6;
+        }
+
+        kbd {
+            background: #444;
+            padding: 3px 6px;
+            border-radius: 4px;
+            border: 1px solid #666;
+            color: #fff;
+            font-weight: bold;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+
+    <div>
+        <canvas id="gameCanvas" width="480" height="640"></canvas>
+    </div>
+    
+    <div class="instructions">
+        <p>Reach the finish line for the GOLD medal!</p>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+
+        const p1Image = new Image();
+        p1Image.src = 'player1.png'; // Blue Racer Image
+        
+        const p2Image = new Image();
+        p2Image.src = 'player2.png'; // Red Shredder Image
+
+        // --- GAME STATE ---
+        let gameState = 'START'; 
+        let score = 0;
+        let speed = 0;
+        let baseSpeed = 5;
+        let frameCount = 0;
+        let selectedCharIndex = 0;
+        
+        // Progress Tracking
+        let distanceTraveled = 0;
+        const GOAL_DISTANCE = 60000; 
+        
+        // Finish Line Logic
+        let finishLineObj = null; 
+        let isFinishing = false;  
+        let hasCrossedLine = false; 
+
+        // --- CONFIGURATION ---
+        const characters = [
+            { 
+                name: "BLUE RACER", 
+                color: "#0066ff", 
+                goggleColor: "#ffcc00", 
+                turnSpeed: 5,
+                desc: "Balanced handling."
+            },
+            { 
+                name: "RED SHREDDER", 
+                color: "#ff2222", 
+                goggleColor: "#00ffff", 
+                turnSpeed: 7,
+                desc: "High speed turning."
+            }
+        ];
+
+        const skier = {
+            x: 0, y: 0, z: 0,
+            vx: 0, jumpVelocity: 0,
+            width: 24, height: 28,
+            isJumping: false,
+            color: "", goggleColor: ""
+        };
+
+        let obstacles = [];
+        let particles = [];
+        let gameplaySnow = [];
+        let menuSnow = [];
+
+        const keys = { ArrowLeft: false, ArrowRight: false, Space: false };
+
+        // --- INPUT ---
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft') {
+                keys.ArrowLeft = true;
+                if (gameState === 'SELECT') selectedCharIndex = 0;
+            }
+            if (e.key === 'ArrowRight') {
+                keys.ArrowRight = true;
+                if (gameState === 'SELECT') selectedCharIndex = 1;
+            }
+            if (e.key === ' ') {
+                keys.Space = true;
+                if (gameState === 'START') gameState = 'SELECT';
+                else if (gameState === 'SELECT') {
+                    applyCharacter();
+                    resetGame();
+                }
+                else if (gameState === 'GAMEOVER' || gameState === 'WIN') gameState = 'SELECT';
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') keys.ArrowLeft = false;
+            if (e.key === 'ArrowRight') keys.ArrowRight = false;
+            if (e.key === ' ') keys.Space = false;
+        });
+
+        // --- LOGIC ---
+        function initSnow() {
+            gameplaySnow = [];
+            for(let i=0; i<80; i++) { 
+                gameplaySnow.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 3 + 2, 
+                    speed: Math.random() * 2 + 1
+                });
+            }
+
+            menuSnow = [];
+            for(let i=0; i<30; i++) {
+                menuSnow.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: Math.random() * 8 + 6,
+                    speed: Math.random() * 1.0 + 0.5,
+                    angle: Math.random() * Math.PI * 2,
+                    spinSpeed: (Math.random() - 0.5) * 0.05,
+                    swaySpeed: Math.random() * 0.03 + 0.01,
+                    swayOffset: Math.random() * Math.PI * 2,
+                    swayAmp: Math.random() * 1.5 + 0.5
+                });
+            }
+        }
+
+        function applyCharacter() {
+            const char = characters[selectedCharIndex];
+            skier.color = char.color;
+            skier.goggleColor = char.goggleColor;
+            skier.turnSpeed = char.turnSpeed;
+        }
+
+        function resetGame() {
+            skier.x = canvas.width/2 - 12;
+            skier.y = 120; // Player starts fixed at top
+            skier.z = 0;
+            skier.isJumping = false;
+            obstacles = [];
+            particles = [];
+            score = 0;
+            distanceTraveled = 0;
+            speed = baseSpeed;
+            frameCount = 0;
+            
+            finishLineObj = null;
+            isFinishing = false;
+            hasCrossedLine = false;
+            
+            gameState = 'PLAYING';
+        }
+
+        function spawnObstacle() {
+            // Stop spawning if we have a finish line
+            if (finishLineObj) return; 
+
+            // Spawn Finish Line at Goal Distance
+            if (distanceTraveled >= GOAL_DISTANCE) {
+                let finish = {
+                    x: 0,
+                    y: canvas.height + 50, // Start just offscreen
+                    width: canvas.width,
+                    height: 40,
+                    type: 'FINISH_LINE'
+                };
+                obstacles.push(finish);
+                finishLineObj = finish; // Track it globally
+                return;
+            }
+
+            let spawnRate = Math.max(20, 50 - Math.floor(score/300));
+            if (frameCount % spawnRate === 0) {
+                const r = Math.random();
+                let type = 'TREE';
+                let w = 24, h = 40;
+                let rampSize = 'NORMAL';
+                
+                if (r > 0.85) { 
+                    type = 'RAMP'; 
+                    if (Math.random() > 0.7) { rampSize = 'MEGA'; w = 60; h = 30; } 
+                    else { w = 40; h = 20; }
+                }
+                else if (r > 0.5) { type = 'ROCK'; w = 30; h = 20; }
+
+                obstacles.push({
+                    x: Math.random() * (canvas.width - w),
+                    y: canvas.height + 50,
+                    width: w, height: h, type: type, rampSize: rampSize
+                });
+            }
+        }
+
+        function spawnParticles(x, y, color, count) {
+            for(let i=0; i<count; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    life: 1.0,
+                    color: color
+                });
+            }
+        }
+
+        function update() {
+            frameCount++;
+
+            // --- MENU ANIMATION ---
+            if (gameState === 'START' || gameState === 'SELECT') {
+                for (let s of menuSnow) {
+                    s.y += s.speed;
+                    s.angle += s.spinSpeed;
+                    s.x += Math.sin(frameCount * s.swaySpeed + s.swayOffset) * s.swayAmp;
+                    if (s.y > canvas.height + s.size) {
+                        s.y = -s.size;
+                        s.x = Math.random() * canvas.width;
+                    }
+                }
+            }
+
+            if (gameState === 'PLAYING') {
+                
+                // === FINISH LINE CINEMATIC LOGIC ===
+                if (finishLineObj && !isFinishing) {
+                    if (finishLineObj.y <= 320) { 
+                        isFinishing = true;
+                        speed = 0; // FREEZE THE WORLD (Camera stops)
+                    }
+                }
+
+                if (isFinishing) {
+                    // CINEMATIC MODE:
+                    // 1. World is stopped (speed=0)
+                    // 2. Skier accelerates DOWN the screen
+                    skier.y += 8; 
+
+                    // Check for crossing the line (Visual effect only)
+                    if (finishLineObj && !hasCrossedLine && skier.y > finishLineObj.y) {
+                        hasCrossedLine = true;
+                        // Confetti explosion
+                        spawnParticles(skier.x, skier.y, '#ffff00', 40); 
+                        spawnParticles(skier.x + 20, skier.y, '#ffffff', 20);
+                        spawnParticles(skier.x - 20, skier.y, '#ff0000', 20);
+                    }
+
+                    // Check if player is fully offscreen to trigger WIN
+                    if (skier.y > canvas.height + 100) {
+                        gameState = 'WIN';
+                    }
+                } 
+                else {
+                    // NORMAL GAMEPLAY (Player Y is fixed, World moves)
+                    let speedMod = (speed/10);
+                    score += speedMod;
+                    distanceTraveled += speed * 2;
+                    if (frameCount % 600 === 0) speed += 0.5;
+
+                    // Steer
+                    let turn = skier.turnSpeed;
+                    if (skier.isJumping) turn *= 0.5; 
+                    if (keys.ArrowLeft) skier.x -= turn;
+                    if (keys.ArrowRight) skier.x += turn;
+
+                    // Bounds
+                    if (skier.x < 10) skier.x = 10;
+                    if (skier.x > canvas.width - 34) skier.x = canvas.width - 34;
+                }
+
+                // Physics
+                if (skier.isJumping) {
+                    skier.z += skier.jumpVelocity;
+                    if (keys.Space) skier.jumpVelocity -= 0.25; 
+                    else skier.jumpVelocity -= 0.6; 
+
+                    if (skier.z <= 0) {
+                        skier.z = 0;
+                        skier.isJumping = false;
+                        spawnParticles(skier.x + 12, skier.y + 28, '#fff', 15);
+                    }
+                }
+
+                spawnObstacle();
+
+                // Move Obstacles
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    let obs = obstacles[i];
+                    
+                    // Obstacles move based on speed (Speed is 0 during Cinematic)
+                    obs.y -= speed; 
+
+                    // Collision Logic
+                    // We DISABLE collision if we are finishing, to prevent crashing while sliding down
+                    if (!isFinishing) {
+                        let hitX = skier.x < obs.x + obs.width - 6 && skier.x + skier.width > obs.x + 6;
+                        let hitY = skier.y < obs.y + obs.height - 6 && skier.y + skier.height > obs.y + 6;
+
+                        if (hitX && hitY) {
+                            if (obs.type === 'RAMP') {
+                                if (!skier.isJumping) {
+                                    skier.isJumping = true;
+                                    if (obs.rampSize === 'MEGA') {
+                                        skier.jumpVelocity = 18; score += 500;
+                                        spawnParticles(skier.x+12, skier.y+28, '#ff0000', 10);
+                                    } else {
+                                        skier.jumpVelocity = 12; score += 100;
+                                        spawnParticles(skier.x+12, skier.y+28, '#ffcc00', 5);
+                                    }
+                                }
+                            } 
+                            else if (obs.type === 'FINISH_LINE') {
+                                // DO NOTHING. Touching the line physically does not trigger win.
+                                // We wait for the camera lock logic above.
+                            }
+                            else {
+                                // TREE / ROCK
+                                if (skier.z < 20) {
+                                    gameState = 'GAMEOVER';
+                                    spawnParticles(skier.x+12, skier.y, '#fff', 20);
+                                }
+                            }
+                        }
+                    }
+
+                    if (obs.y < -100) obstacles.splice(i, 1);
+                }
+
+                // Particles
+                for (let i = particles.length - 1; i >= 0; i--) {
+                    let p = particles[i];
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.life -= 0.05;
+                    if (p.life <= 0) particles.splice(i, 1);
+                }
+
+                // Gameplay Snow
+                for (let s of gameplaySnow) {
+                    s.y -= speed * 1.5; // Snow stops when camera stops
+                    if (s.y < 0) {
+                        s.y = canvas.height;
+                        s.x = Math.random() * canvas.width;
+                    }
+                }
+            }
+        }
+
+        // --- DRAWING ---
+        function drawFacePlaceholder(x, y, color) {
+            ctx.fillStyle = color;
+            ctx.fillRect(x, y, 100, 100);
+            ctx.fillStyle = '#000';
+            ctx.fillRect(x + 20, y + 30, 20, 20); 
+            ctx.fillRect(x + 60, y + 30, 20, 20); 
+            ctx.fillRect(x + 20, y + 70, 60, 10); 
+        }
+
+        function drawMenuSnow() {
+            ctx.fillStyle = '#ffffff'; 
+            for (let s of menuSnow) {
+                ctx.save();
+                ctx.translate(s.x, s.y);
+                ctx.rotate(s.angle);
+                ctx.fillRect(-s.size/2, -s.size/6, s.size, s.size/3);
+                ctx.fillRect(-s.size/6, -s.size/2, s.size/3, s.size);
+                ctx.restore();
+            }
+        }
+
+        function drawProgressBar() {
+            const barHeight = 400;
+            const barWidth = 10;
+            const barX = canvas.width - 20;
+            const barY = 120;
+
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.3)';
+            ctx.fillRect(barX, barY, barWidth, barHeight);
+
+            let progress = Math.min(1, distanceTraveled / GOAL_DISTANCE);
+            let markerY = barY + (progress * barHeight);
+            
+            ctx.fillStyle = '#ffcc00';
+            ctx.fillRect(barX - 4, markerY - 4, 18, 8); 
+            
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(barX - 2, barY + barHeight, 14, 4);
+        }
+
+        function draw() {
+            ctx.fillStyle = '#f0f8ff';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // --- START ---
+            if (gameState === 'START') {
+                drawMenuSnow();
+                ctx.fillStyle = '#222';
+                ctx.font = 'bold 40px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText("PIXEL SKI", canvas.width/2, 200);
+                ctx.fillStyle = '#555';
+                ctx.font = '20px Courier New';
+                ctx.fillText("CHAMPIONSHIP EDITION", canvas.width/2, 240);
+                ctx.fillStyle = '#ff0044';
+                if (Math.floor(Date.now() / 500) % 2 === 0) {
+                    ctx.fillText("PRESS SPACE", canvas.width/2, 350);
+                }
+            }
+
+            // --- SELECT ---
+            else if (gameState === 'SELECT') {
+                drawMenuSnow();
+                ctx.fillStyle = '#222';
+                ctx.font = 'bold 30px Courier New';
+                ctx.textAlign = 'center';
+                ctx.fillText("SELECT RACER", canvas.width/2, 100);
+
+                if (p1Image.complete && p1Image.naturalWidth !== 0) ctx.drawImage(p1Image, 80, 200, 120, 165);
+                else drawFacePlaceholder(80, 200, '#0066ff');
+
+                if (p2Image.complete && p2Image.naturalWidth !== 0) ctx.drawImage(p2Image, 280, 200, 120, 165);
+                else drawFacePlaceholder(280, 200, '#ff2222');
+
+                ctx.lineWidth = 4;
+                ctx.strokeStyle = '#ffcc00';
+                if (selectedCharIndex === 0) ctx.strokeRect(75, 195, 130, 175);
+                else ctx.strokeRect(275, 195, 130, 175);
+
+                let char = characters[selectedCharIndex];
+                ctx.fillStyle = '#333';
+                ctx.font = 'bold 24px Courier New';
+                ctx.fillText(char.name, canvas.width/2, 420);
+                ctx.fillStyle = '#555';
+                ctx.font = '16px Courier New';
+                ctx.fillText(char.desc, canvas.width/2, 450);
+
+                // --- CONTROLS DISPLAY ---
+                ctx.fillStyle = '#666';
+                ctx.font = 'bold 16px Courier New';
+                ctx.fillText("CONTROLS:", canvas.width/2, 530);
+                
+                ctx.font = '14px Courier New';
+                ctx.fillStyle = '#444';
+                ctx.fillText("← → : Select / Steer", canvas.width/2, 555);
+                ctx.fillText("SPACE : Confirm / Jump / Glide", canvas.width/2, 575);
+            }
+
+            // --- PLAYING / END ---
+            else if (gameState === 'PLAYING' || gameState === 'GAMEOVER' || gameState === 'WIN') {
+                ctx.fillStyle = '#8899bb'; 
+                for (let s of gameplaySnow) ctx.fillRect(s.x, s.y, s.size, s.size);
+
+                for(let o of obstacles) {
+                    if (o.type === 'RAMP') {
+                        if (o.rampSize === 'MEGA') {
+                            ctx.fillStyle = '#6688aa'; ctx.fillRect(o.x, o.y + 10, o.width, 15);
+                            ctx.fillStyle = '#ff0000'; ctx.fillRect(o.x, o.y, o.width, 8);
+                            ctx.fillStyle = '#fff'; ctx.font = '10px Courier New';
+                            ctx.fillText("MEGA", o.x + o.width/2, o.y + 20);
+                        } else {
+                            ctx.fillStyle = '#b0d4ff'; ctx.fillRect(o.x, o.y + 10, o.width, 10);
+                            ctx.fillStyle = '#ff6600'; ctx.fillRect(o.x, o.y, o.width, 5);
+                        }
+                    }
+                    else if (o.type === 'FINISH_LINE') {
+                        for (let row = 0; row < 3; row++) {
+                            for (let col = 0; col < canvas.width / 20; col++) {
+                                ctx.fillStyle = (row + col) % 2 === 0 ? '#fff' : '#000';
+                                ctx.fillRect(o.x + (col * 20), o.y + (row * 10), 20, 10);
+                            }
+                        }
+                        ctx.fillStyle = '#885533';
+                        ctx.fillRect(10, o.y - 40, 10, 80);
+                        ctx.fillRect(canvas.width - 20, o.y - 40, 10, 80);
+                        ctx.fillStyle = '#cc0000';
+                        ctx.fillRect(10, o.y - 40, canvas.width - 20, 30);
+                        ctx.fillStyle = '#fff';
+                        ctx.textAlign = 'center';
+                        ctx.font = 'bold 20px Courier New';
+                        ctx.fillText("FINISH", canvas.width/2, o.y - 18);
+                    }
+                    else if (o.type === 'TREE') {
+                        ctx.fillStyle = '#5c4033'; ctx.fillRect(o.x+8, o.y+20, 8, 20); 
+                        ctx.fillStyle = '#228b22'; 
+                        ctx.beginPath(); ctx.moveTo(o.x+12, o.y); ctx.lineTo(o.x+24, o.y+25); ctx.lineTo(o.x, o.y+25); ctx.fill();
+                    } 
+                    else if (o.type === 'ROCK') {
+                        ctx.fillStyle = '#777'; ctx.fillRect(o.x, o.y+5, o.width, o.height-5);
+                    }
+                }
+
+                // Skier
+                let drawY = skier.y - skier.z;
+                
+                if (skier.z > 0) {
+                    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+                    let sSize = 20 * (1 - Math.min(1, skier.z/200));
+                    ctx.beginPath(); ctx.ellipse(skier.x+12, skier.y+28, sSize, 6, 0, 0, Math.PI*2); ctx.fill();
+                }
+
+                ctx.fillStyle = '#333';
+                ctx.fillRect(skier.x-4, drawY+20, 4, 15);
+                ctx.fillRect(skier.x+24, drawY+20, 4, 15);
+
+                ctx.fillStyle = (gameState === 'GAMEOVER') ? '#555' : skier.color;
+                ctx.fillRect(skier.x, drawY, skier.width, skier.height);
+                
+                // FACE LOGIC
+                let charImg = selectedCharIndex === 0 ? p1Image : p2Image;
+                if (charImg.complete && charImg.naturalWidth !== 0) {
+                    // Calculate aspect ratio based on loading screen dims (120x165)
+                    // Body width is 24. New height is 24 * (165/120) = 33.
+                    const faceW = 24;
+                    const faceH = 33; 
+                    // Move up by 12 to sit on shoulders correctly
+                    ctx.drawImage(charImg, skier.x, drawY - 12, faceW, faceH);
+                } else {
+                    // Fallback pixels
+                    ctx.fillStyle = skier.goggleColor;
+                    ctx.fillRect(skier.x+2, drawY+5, 20, 8);
+                }
+
+                for(let p of particles) {
+                    ctx.globalAlpha = p.life;
+                    ctx.fillStyle = p.color;
+                    ctx.fillRect(p.x, p.y, 3, 3);
+                    ctx.globalAlpha = 1.0;
+                }
+
+                ctx.fillStyle = '#222';
+                ctx.font = '20px Courier New';
+                ctx.textAlign = 'left';
+                ctx.fillText("SCORE: " + Math.floor(score), 10, 30);
+                
+                if (skier.isJumping && keys.Space) {
+                    ctx.fillStyle = '#00ccff';
+                    ctx.font = 'bold 16px Courier New';
+                    ctx.textAlign = 'center';
+                    ctx.fillText("GLIDING!", skier.x + 12, drawY - 20);
+                }
+
+                drawProgressBar();
+
+                // WIN SCREEN
+                if (gameState === 'WIN') {
+                    ctx.fillStyle = 'rgba(0,0,0,0.8)';
+                    ctx.fillRect(0,0,canvas.width, canvas.height);
+                    
+                    ctx.fillStyle = '#fff';
+                    ctx.textAlign = 'center';
+                    ctx.font = 'bold 36px Courier New';
+                    ctx.fillText("COURSE COMPLETE!", canvas.width/2, 200);
+                    
+                    ctx.font = '24px Courier New';
+                    ctx.fillStyle = '#ffff00';
+                    ctx.fillText("FINAL SCORE: " + Math.floor(score), canvas.width/2, 250);
+
+                    // Medal Logic
+                    let medalColor = '#cd7f32'; 
+                    let medalText = "BRONZE";
+                    if (score > 3500) { medalColor = '#c0c0c0'; medalText = "SILVER"; }
+                    if (score > 7000) { medalColor = '#ffd700'; medalText = "GOLD"; }
+
+                    ctx.fillStyle = medalColor;
+                    ctx.beginPath();
+                    ctx.arc(canvas.width/2, 340, 40, 0, Math.PI*2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#fff';
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+
+                    ctx.fillStyle = '#cc0000';
+                    ctx.fillRect(canvas.width/2 - 10, 280, 20, 25);
+
+                    ctx.fillStyle = '#fff';
+                    ctx.font = 'bold 14px Courier New';
+                    ctx.fillText(medalText, canvas.width/2, 345);
+
+                    ctx.fillStyle = '#fff';
+                    ctx.font = '18px Courier New';
+                    ctx.fillText("SPACE to Play Again", canvas.width/2, 450);
+                }
+
+                if (gameState === 'GAMEOVER') {
+                    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                    ctx.fillRect(0,0,canvas.width, canvas.height);
+                    ctx.fillStyle = '#fff';
+                    ctx.textAlign = 'center';
+                    ctx.font = 'bold 40px Courier New';
+                    ctx.fillText("CRASH!", canvas.width/2, 300);
+                    ctx.font = '20px Courier New';
+                    ctx.fillText("SPACE TO RETRY", canvas.width/2, 350);
+                }
+            }
+        }
+
+        function loop() {
+            update();
+            draw();
+            requestAnimationFrame(loop);
+        }
+
+        initSnow();
+        loop();
+
+    </script>
+</body>
+</html>
