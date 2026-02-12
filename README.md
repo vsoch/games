@@ -1,3 +1,3 @@
 # Games!
 
-- [ski-bum](ski-bum): Happy Birthday Dad, 2026!
+- [ski-bum](https://vsoch.github.com/games/ski-bums): Happy Birthday Dad, 2026!

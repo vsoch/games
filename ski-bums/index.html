@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Retro Ski - Championship Edition</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Ski Bums, A Dinosaur Game</title>
     <style>
         body {
             background-color: #2b2b36;
@@ -18,16 +18,30 @@
             overflow: hidden;
             image-rendering: pixelated; 
             image-rendering: crisp-edges;
+            touch-action: none; 
+        }
+
+        .game-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            width: 100%;
+            max-width: 480px;
+            padding: 10px;
+            box-sizing: border-box;
         }
 
         canvas {
             background-color: #f0f8ff;
-            width: 480px; 
-            height: 640px;
+            width: 100%; 
+            max-width: 480px;
+            height: auto;
+            aspect-ratio: 3 / 4; 
             image-rendering: pixelated;
             border: 4px solid #fff;
             border-radius: 4px;
             box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            cursor: pointer;
         }
 
         .instructions {
@@ -47,16 +61,58 @@
             font-weight: bold;
             font-size: 12px;
         }
+
+        /* Mobile Touch Controls */
+        .touch-controls {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            margin-top: 15px;
+            gap: 10px;
+        }
+
+        .touch-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
+            flex: 1;
+            padding: 20px 0;
+            font-size: 24px;
+            font-weight: bold;
+            border-radius: 8px;
+            text-align: center;
+            user-select: none;
+            -webkit-user-select: none;
+            cursor: pointer;
+            touch-action: manipulation;
+        }
+
+        .touch-btn:active {
+            background: rgba(255, 255, 255, 0.3);
+            border-color: #ffcc00;
+        }
+
+        @media (min-width: 600px) {
+            .touch-controls {
+                display: none;
+            }
+        }
     </style>
 </head>
 <body>
 
-    <div>
+    <div class="game-wrapper">
         <canvas id="gameCanvas" width="480" height="640"></canvas>
+        
+        <div class="touch-controls">
+            <div id="btnLeft" class="touch-btn">←</div>
+            <div id="btnJump" class="touch-btn">JUMP</div>
+            <div id="btnRight" class="touch-btn">→</div>
+        </div>
     </div>
     
     <div class="instructions">
-        <p>Reach the finish line for the GOLD medal!</p>
+        <p>Reach the finish line with a high score for the GOLD medal!</p>
     </div>
 
     <script>
@@ -64,11 +120,12 @@
         const ctx = canvas.getContext('2d');
         ctx.imageSmoothingEnabled = false;
 
+        // --- ASSETS ---
         const p1Image = new Image();
-        p1Image.src = 'player1.png'; // Blue Racer Image
+        p1Image.src = 'player1.png'; 
         
         const p2Image = new Image();
-        p2Image.src = 'player2.png'; // Red Shredder Image
+        p2Image.src = 'player2.png'; 
 
         // --- GAME STATE ---
         let gameState = 'START'; 
@@ -78,11 +135,9 @@
         let frameCount = 0;
         let selectedCharIndex = 0;
         
-        // Progress Tracking
         let distanceTraveled = 0;
         const GOAL_DISTANCE = 60000; 
         
-        // Finish Line Logic
         let finishLineObj = null; 
         let isFinishing = false;  
         let hasCrossedLine = false; 
@@ -120,32 +175,146 @@
 
         const keys = { ArrowLeft: false, ArrowRight: false, Space: false };
 
-        // --- INPUT ---
+        // --- INPUT ACTIONS ---
+        function actionSpaceDown() {
+            keys.Space = true;
+            if (gameState === 'START') gameState = 'SELECT';
+            else if (gameState === 'SELECT') {
+                applyCharacter();
+                resetGame();
+            }
+            else if (gameState === 'GAMEOVER' || gameState === 'WIN') gameState = 'SELECT';
+        }
+        function actionSpaceUp() { keys.Space = false; }
+
+        function actionLeftDown() {
+            if (gameState === 'START' || gameState === 'GAMEOVER' || gameState === 'WIN') {
+                actionSpaceDown();
+                return;
+            }
+            keys.ArrowLeft = true;
+            if (gameState === 'SELECT') selectedCharIndex = 0;
+        }
+        function actionLeftUp() { keys.ArrowLeft = false; }
+
+        function actionRightDown() {
+            if (gameState === 'START' || gameState === 'GAMEOVER' || gameState === 'WIN') {
+                actionSpaceDown();
+                return;
+            }
+            keys.ArrowRight = true;
+            if (gameState === 'SELECT') selectedCharIndex = 1;
+        }
+        function actionRightUp() { keys.ArrowRight = false; }
+
+        // Keyboard Listeners
         window.addEventListener('keydown', (e) => {
-            if (e.key === 'ArrowLeft') {
-                keys.ArrowLeft = true;
-                if (gameState === 'SELECT') selectedCharIndex = 0;
-            }
-            if (e.key === 'ArrowRight') {
-                keys.ArrowRight = true;
-                if (gameState === 'SELECT') selectedCharIndex = 1;
-            }
-            if (e.key === ' ') {
-                keys.Space = true;
-                if (gameState === 'START') gameState = 'SELECT';
-                else if (gameState === 'SELECT') {
-                    applyCharacter();
-                    resetGame();
-                }
-                else if (gameState === 'GAMEOVER' || gameState === 'WIN') gameState = 'SELECT';
-            }
+            if (e.key === 'ArrowLeft') actionLeftDown();
+            if (e.key === 'ArrowRight') actionRightDown();
+            if (e.key === ' ') actionSpaceDown();
+        });
+        window.addEventListener('keyup', (e) => {
+            if (e.key === 'ArrowLeft') actionLeftUp();
+            if (e.key === 'ArrowRight') actionRightUp();
+            if (e.key === ' ') actionSpaceUp();
         });
 
-        window.addEventListener('keyup', (e) => {
-            if (e.key === 'ArrowLeft') keys.ArrowLeft = false;
-            if (e.key === 'ArrowRight') keys.ArrowRight = false;
-            if (e.key === ' ') keys.Space = false;
-        });
+        // UI Button Listeners
+        function bindTouch(elementId, downFn, upFn) {
+            const el = document.getElementById(elementId);
+            el.addEventListener('touchstart', (e) => { if (e.cancelable) e.preventDefault(); downFn(); }, {passive: false});
+            el.addEventListener('touchend', (e) => { if (e.cancelable) e.preventDefault(); upFn(); }, {passive: false});
+            el.addEventListener('touchcancel', (e) => { if (e.cancelable) e.preventDefault(); upFn(); }, {passive: false});
+            el.addEventListener('mousedown', (e) => { downFn(); });
+            el.addEventListener('mouseup', (e) => { upFn(); });
+            el.addEventListener('mouseleave', (e) => { upFn(); });
+        }
+
+        bindTouch('btnLeft', actionLeftDown, actionLeftUp);
+        bindTouch('btnRight', actionRightDown, actionRightUp);
+        bindTouch('btnJump', actionSpaceDown, actionSpaceUp);
+
+        // --- CANVAS CLICK/TOUCH/HOVER MAPPING ---
+        function handleCanvasPointer(e, isDown, isMove = false) {
+            if (e.type.startsWith('touch') && e.cancelable) e.preventDefault(); 
+            
+            if (!isDown && !isMove) {
+                actionLeftUp();
+                actionRightUp();
+                actionSpaceUp(); 
+                return;
+            }
+
+            // Calculate precise Canvas Coordinates
+            const rect = canvas.getBoundingClientRect();
+            let clientX = e.clientX;
+            let clientY = e.clientY;
+            
+            if (e.touches && e.touches.length > 0) {
+                clientX = e.touches[0].clientX;
+                clientY = e.touches[0].clientY;
+            }
+
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            
+            const x = (clientX - rect.left) * scaleX;
+            const y = (clientY - rect.top) * scaleY;
+
+            // --- HOVER LOGIC ---
+            // If it's a mouse movement with no buttons clicked
+            if (isMove && e.type.startsWith('mouse') && e.buttons === 0) {
+                if (gameState === 'SELECT') {
+                    // Hover over Player 1
+                    if (x >= 75 && x <= 205 && y >= 195 && y <= 370) {
+                        selectedCharIndex = 0;
+                    } 
+                    // Hover over Player 2
+                    else if (x >= 275 && x <= 405 && y >= 195 && y <= 370) {
+                        selectedCharIndex = 1;
+                    }
+                }
+                return; // Stop here, we don't want to steer or click anything
+            }
+
+            // --- CLICK / TAP LOGIC ---
+            if (gameState === 'START' || gameState === 'GAMEOVER' || gameState === 'WIN') {
+                actionSpaceDown();
+                return; 
+            }
+
+            if (gameState === 'SELECT' && !isMove) {
+                if (x >= 75 && x <= 205 && y >= 195 && y <= 370) {
+                    selectedCharIndex = 0;
+                    actionSpaceDown(); 
+                    return;
+                }
+                if (x >= 275 && x <= 405 && y >= 195 && y <= 370) {
+                    selectedCharIndex = 1;
+                    actionSpaceDown(); 
+                    return;
+                }
+            }
+            
+            // Steering during gameplay
+            if (x < canvas.width / 2) {
+                actionLeftDown();
+                actionRightUp(); 
+            } else {
+                actionRightDown();
+                actionLeftUp();  
+            }
+        }
+
+        canvas.addEventListener('touchstart', (e) => handleCanvasPointer(e, true), {passive: false});
+        canvas.addEventListener('touchmove', (e) => handleCanvasPointer(e, true, true), {passive: false});
+        canvas.addEventListener('touchend', (e) => handleCanvasPointer(e, false), {passive: false});
+        canvas.addEventListener('touchcancel', (e) => handleCanvasPointer(e, false), {passive: false});
+
+        canvas.addEventListener('mousedown', (e) => handleCanvasPointer(e, true));
+        canvas.addEventListener('mousemove', (e) => handleCanvasPointer(e, true, true));
+        canvas.addEventListener('mouseup', (e) => handleCanvasPointer(e, false));
+        canvas.addEventListener('mouseleave', (e) => handleCanvasPointer(e, false));
 
         // --- LOGIC ---
         function initSnow() {
@@ -184,7 +353,7 @@
 
         function resetGame() {
             skier.x = canvas.width/2 - 12;
-            skier.y = 120; // Player starts fixed at top
+            skier.y = 120; 
             skier.z = 0;
             skier.isJumping = false;
             obstacles = [];
@@ -202,20 +371,18 @@
         }
 
         function spawnObstacle() {
-            // Stop spawning if we have a finish line
             if (finishLineObj) return; 
 
-            // Spawn Finish Line at Goal Distance
             if (distanceTraveled >= GOAL_DISTANCE) {
                 let finish = {
                     x: 0,
-                    y: canvas.height + 50, // Start just offscreen
+                    y: canvas.height + 50,
                     width: canvas.width,
                     height: 40,
                     type: 'FINISH_LINE'
                 };
                 obstacles.push(finish);
-                finishLineObj = finish; // Track it globally
+                finishLineObj = finish;
                 return;
             }
 
@@ -269,55 +436,45 @@
                 }
             }
 
+            // --- GAMEPLAY ---
             if (gameState === 'PLAYING') {
                 
-                // === FINISH LINE CINEMATIC LOGIC ===
                 if (finishLineObj && !isFinishing) {
                     if (finishLineObj.y <= 320) { 
                         isFinishing = true;
-                        speed = 0; // FREEZE THE WORLD (Camera stops)
+                        speed = 0; 
                     }
                 }
 
                 if (isFinishing) {
-                    // CINEMATIC MODE:
-                    // 1. World is stopped (speed=0)
-                    // 2. Skier accelerates DOWN the screen
                     skier.y += 8; 
 
-                    // Check for crossing the line (Visual effect only)
                     if (finishLineObj && !hasCrossedLine && skier.y > finishLineObj.y) {
                         hasCrossedLine = true;
-                        // Confetti explosion
                         spawnParticles(skier.x, skier.y, '#ffff00', 40); 
                         spawnParticles(skier.x + 20, skier.y, '#ffffff', 20);
                         spawnParticles(skier.x - 20, skier.y, '#ff0000', 20);
                     }
 
-                    // Check if player is fully offscreen to trigger WIN
                     if (skier.y > canvas.height + 100) {
                         gameState = 'WIN';
                     }
                 } 
                 else {
-                    // NORMAL GAMEPLAY (Player Y is fixed, World moves)
                     let speedMod = (speed/10);
                     score += speedMod;
                     distanceTraveled += speed * 2;
                     if (frameCount % 600 === 0) speed += 0.5;
 
-                    // Steer
                     let turn = skier.turnSpeed;
                     if (skier.isJumping) turn *= 0.5; 
                     if (keys.ArrowLeft) skier.x -= turn;
                     if (keys.ArrowRight) skier.x += turn;
 
-                    // Bounds
                     if (skier.x < 10) skier.x = 10;
                     if (skier.x > canvas.width - 34) skier.x = canvas.width - 34;
                 }
 
-                // Physics
                 if (skier.isJumping) {
                     skier.z += skier.jumpVelocity;
                     if (keys.Space) skier.jumpVelocity -= 0.25; 
@@ -332,15 +489,10 @@
 
                 spawnObstacle();
 
-                // Move Obstacles
                 for (let i = obstacles.length - 1; i >= 0; i--) {
                     let obs = obstacles[i];
-                    
-                    // Obstacles move based on speed (Speed is 0 during Cinematic)
                     obs.y -= speed; 
 
-                    // Collision Logic
-                    // We DISABLE collision if we are finishing, to prevent crashing while sliding down
                     if (!isFinishing) {
                         let hitX = skier.x < obs.x + obs.width - 6 && skier.x + skier.width > obs.x + 6;
                         let hitY = skier.y < obs.y + obs.height - 6 && skier.y + skier.height > obs.y + 6;
@@ -359,11 +511,8 @@
                                 }
                             } 
                             else if (obs.type === 'FINISH_LINE') {
-                                // DO NOTHING. Touching the line physically does not trigger win.
-                                // We wait for the camera lock logic above.
                             }
                             else {
-                                // TREE / ROCK
                                 if (skier.z < 20) {
                                     gameState = 'GAMEOVER';
                                     spawnParticles(skier.x+12, skier.y, '#fff', 20);
@@ -371,11 +520,9 @@
                             }
                         }
                     }
-
                     if (obs.y < -100) obstacles.splice(i, 1);
                 }
 
-                // Particles
                 for (let i = particles.length - 1; i >= 0; i--) {
                     let p = particles[i];
                     p.x += p.vx;
@@ -384,9 +531,8 @@
                     if (p.life <= 0) particles.splice(i, 1);
                 }
 
-                // Gameplay Snow
                 for (let s of gameplaySnow) {
-                    s.y -= speed * 1.5; // Snow stops when camera stops
+                    s.y -= speed * 1.5; 
                     if (s.y < 0) {
                         s.y = canvas.height;
                         s.x = Math.random() * canvas.width;
@@ -452,7 +598,7 @@
                 ctx.fillText("CHAMPIONSHIP EDITION", canvas.width/2, 240);
                 ctx.fillStyle = '#ff0044';
                 if (Math.floor(Date.now() / 500) % 2 === 0) {
-                    ctx.fillText("PRESS SPACE", canvas.width/2, 350);
+                    ctx.fillText("TAP OR PRESS SPACE", canvas.width/2, 350);
                 }
             }
 
@@ -483,15 +629,13 @@
                 ctx.font = '16px Courier New';
                 ctx.fillText(char.desc, canvas.width/2, 450);
 
-                // --- CONTROLS DISPLAY ---
                 ctx.fillStyle = '#666';
                 ctx.font = 'bold 16px Courier New';
                 ctx.fillText("CONTROLS:", canvas.width/2, 530);
-                
                 ctx.font = '14px Courier New';
                 ctx.fillStyle = '#444';
-                ctx.fillText("← → : Select / Steer", canvas.width/2, 555);
-                ctx.fillText("SPACE : Confirm / Jump / Glide", canvas.width/2, 575);
+                ctx.fillText("Tap left/right side of screen to Steer", canvas.width/2, 555);
+                ctx.fillText("Hold JUMP/SPACE to Glide!", canvas.width/2, 575);
             }
 
             // --- PLAYING / END ---
@@ -538,7 +682,6 @@
                     }
                 }
 
-                // Skier
                 let drawY = skier.y - skier.z;
                 
                 if (skier.z > 0) {
@@ -554,17 +697,12 @@
                 ctx.fillStyle = (gameState === 'GAMEOVER') ? '#555' : skier.color;
                 ctx.fillRect(skier.x, drawY, skier.width, skier.height);
                 
-                // FACE LOGIC
                 let charImg = selectedCharIndex === 0 ? p1Image : p2Image;
                 if (charImg.complete && charImg.naturalWidth !== 0) {
-                    // Calculate aspect ratio based on loading screen dims (120x165)
-                    // Body width is 24. New height is 24 * (165/120) = 33.
                     const faceW = 24;
                     const faceH = 33; 
-                    // Move up by 12 to sit on shoulders correctly
                     ctx.drawImage(charImg, skier.x, drawY - 12, faceW, faceH);
                 } else {
-                    // Fallback pixels
                     ctx.fillStyle = skier.goggleColor;
                     ctx.fillRect(skier.x+2, drawY+5, 20, 8);
                 }
@@ -590,7 +728,6 @@
 
                 drawProgressBar();
 
-                // WIN SCREEN
                 if (gameState === 'WIN') {
                     ctx.fillStyle = 'rgba(0,0,0,0.8)';
                     ctx.fillRect(0,0,canvas.width, canvas.height);
@@ -604,7 +741,6 @@
                     ctx.fillStyle = '#ffff00';
                     ctx.fillText("FINAL SCORE: " + Math.floor(score), canvas.width/2, 250);
 
-                    // Medal Logic
                     let medalColor = '#cd7f32'; 
                     let medalText = "BRONZE";
                     if (score > 3500) { medalColor = '#c0c0c0'; medalText = "SILVER"; }
@@ -627,7 +763,7 @@
 
                     ctx.fillStyle = '#fff';
                     ctx.font = '18px Courier New';
-                    ctx.fillText("SPACE to Play Again", canvas.width/2, 450);
+                    ctx.fillText("TAP SCREEN to Replay", canvas.width/2, 450);
                 }
 
                 if (gameState === 'GAMEOVER') {
@@ -638,7 +774,7 @@
                     ctx.font = 'bold 40px Courier New';
                     ctx.fillText("CRASH!", canvas.width/2, 300);
                     ctx.font = '20px Courier New';
-                    ctx.fillText("SPACE TO RETRY", canvas.width/2, 350);
+                    ctx.fillText("TAP SCREEN TO RETRY", canvas.width/2, 350);
                 }
             }
         }
