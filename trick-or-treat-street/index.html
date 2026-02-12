@@ -1,0 +1,1069 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trick or Treat Street</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the game board and feel */
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #1a1a1a; /* Dark background for night theme */
+            color: #f7f7f7;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 1rem;
+        }
+
+        #game-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+            max-width: 1024px;
+            width: 100%;
+            background-color: #2a2a2a;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+            border: 4px solid #ff7700; /* Halloween orange border */
+        }
+
+        canvas {
+            border: 4px solid #ff0000; /* Blood red inner border */
+            background-color: #000000; /* Dark street background */
+            display: block;
+            margin: 0 auto;
+            border-radius: 8px;
+            image-rendering: pixelated; /* Sharp pixels */
+        }
+
+        .button-primary {
+            background-color: #ff7700;
+            color: #1a1a1a;
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: background-color 0.2s, transform 0.1s;
+        }
+
+        .button-primary:hover {
+            background-color: #ff9933;
+            transform: translateY(-1px);
+        }
+
+        .button-primary:disabled {
+            background-color: #555555;
+            color: #999999;
+            cursor: not-allowed;
+        }
+
+        #char-select-modal {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.95);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .char-card {
+            cursor: pointer;
+            padding: 0.75rem;
+            border-radius: 8px;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+            text-align: center;
+        }
+
+        .char-card:hover {
+            background-color: #383838;
+            border-color: #ff7700;
+        }
+
+        .char-card.selected {
+            background-color: #444444;
+            border-color: #ff0000;
+            box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+        }
+
+        #message-box {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: #330000;
+            border: 4px solid #ff0000;
+            padding: 20px;
+            border-radius: 10px;
+            color: white;
+            z-index: 200;
+            box-shadow: 0 0 20px rgba(255, 0, 0, 0.8);
+            text-align: center;
+            display: none;
+            max-width: 80%;
+        }
+
+        /* Responsive grid for character selection */
+        .char-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+            gap: 10px;
+        }
+    </style>
+</head>
+<body class="selection:bg-yellow-500 selection:text-black">
+
+    <div id="game-container">
+        <h1 class="text-4xl font-extrabold text-center tracking-tight text-[#ff9933]">Trick or Treat Street!</h1>
+
+        <!-- Game Info Panel -->
+        <div class="flex justify-between text-sm sm:text-lg font-mono p-2 border border-gray-600 rounded-lg">
+            <div>Candy: <span id="candy-score" class="font-bold text-yellow-400">0</span></div>
+            <div>Time: <span id="time-remaining" class="font-bold text-red-400">0:00</span></div>
+            <div>Character: <span id="char-name" class="font-bold text-red-500">N/A</span></div>
+        </div>
+        <div class="flex justify-center text-sm sm:text-lg font-mono p-2 border border-gray-600 rounded-lg">
+            Pumpkins: <span id="pumpkin-score" class="font-bold text-orange-400 ml-2">0</span>
+        </div>
+
+        <!-- NEW: Flex container for canvas and event log -->
+        <div class="flex flex-col md:flex-row gap-4 w-full">
+            <!-- Canvas for the 2D Game World -->
+            <canvas id="game-canvas" width="600" height="600" class="flex-shrink-0"></canvas>
+            
+            <!-- NEW: Event Log -->
+            <div class="w-full md:flex-1">
+                <h2 class="text-xl font-bold mb-2 text-center text-gray-400">Event Log</h2>
+                <div id="event-log-container" class="h-full min-h-[200px] md:h-[600px] bg-black border-2 border-gray-600 rounded-lg p-3 overflow-y-auto flex flex-col-reverse">
+                    <!-- Events will be added here by JavaScript -->
+                    <p class="text-gray-500 italic">Your adventure begins...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW: Leaderboard (hidden by default) -->
+        <div id="leaderboard-container" class="hidden w-full">
+            <h2 class="text-3xl font-bold mb-4 text-center text-yellow-400">Top Trick or Treaters!</h2>
+            <table class="w-full text-left border-collapse border border-gray-600">
+                <thead>
+                    <tr class="bg-gray-700">
+                        <th class="p-3 border-b border-gray-600">Rank</th>
+                        <th class="p-3 border-b border-gray-600">Name</th>
+                        <th class="p-3 border-b border-gray-600">Candy 🍬</th>
+                        <th class="p-3 border-b border-gray-600">Pumpkins 🎃</th>
+                    </tr>
+                </thead>
+                <tbody id="leaderboard-table-body">
+                    <!-- Scores will be injected here -->
+                </tbody>
+            </table>
+            <button id="play-again-btn" class="button-primary w-full mt-6">
+                Play Again
+            </button>
+        </div>
+
+    </div>
+
+    <!-- Character Selection Modal -->
+    <div id="char-select-modal">
+        <div class="bg-gray-800 p-8 rounded-xl shadow-2xl w-full max-w-2xl border-4 border-[#ff0000]">
+            <h2 class="text-3xl font-bold mb-4 text-center text-[#ff7700]">Choose Your Costume</h2>
+            <p class="text-center mb-6 text-gray-300">Each costume grants a unique ability to help you on Trick or Treat Street.</p>
+
+            <!-- NEW: Player Name Input -->
+            <div class="mb-4">
+                <label for="player-name-input" class="block text-sm font-medium text-gray-300 mb-2">Enter Your Name:</label>
+                <input type="text" id="player-name-input" class="w-full p-2 rounded bg-gray-700 border border-gray-600 text-white focus:outline-none focus:ring-2 focus:ring-ff7700" placeholder="Spooky Steve">
+            </div>
+
+            <div class="char-grid mb-6" id="character-options">
+                <!-- Character cards will be injected here by JavaScript -->
+            </div>
+
+            <p id="char-ability-desc" class="h-10 text-center text-sm italic text-yellow-300">Select a character to see their ability...</p>
+
+            <button id="start-game-btn" class="button-primary w-full mt-4" disabled>
+                Start Trick or Treating
+            </button>
+        </div>
+    </div>
+
+    <!-- Custom Modal for Game Messages (e.g., Bat Steal) -->
+    <div id="message-box" role="alert" aria-live="polite">
+        <p id="message-text" class="text-xl font-semibold mb-3"></p>
+        <button id="message-box-ok-btn" class="button-primary px-6 py-2">
+            OK
+        </button>
+    </div>
+
+    <script>
+        // --- Game Setup and Constants ---
+
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const CELL_SIZE = 30;
+        const GRID_SIZE = 20; // 20x20 grid
+        const CANVAS_SIZE = CELL_SIZE * GRID_SIZE;
+        canvas.width = CANVAS_SIZE;
+        canvas.height = CANVAS_SIZE;
+
+        const BASE_MOVE_SPEED = 3; // Pixels per frame for grid movement
+        const SLOW_MULTIPLIER = 0.5; // Web penalty (slows move speed)
+        const SLOW_DURATION = 3000; // 3 seconds slow
+        const BAT_CANDY_STEAL = 5;
+        const TIME_LIMIT = 120; // Game time limit in seconds (2 minutes)
+        const BAT_WANDER_SPEED = 0.1; // Slower, more ambient wander
+        const BAT_FLEE_SPEED = 0.5; // Fast speed when fleeing
+        const EVENT_LOG_MAX_SIZE = 20; // Max number of messages in the log
+
+        // NEW: Default Leaderboard Scores
+        const DEFAULT_LEADERBOARD = [
+            { name: "Count Candula", candy: 150, pumpkins: 25 },
+            { name: "Jack O. Lantern", candy: 135, pumpkins: 40 },
+            { name: "Boo Berry", candy: 120, pumpkins: 15 },
+            { name: "Wanda the Witch", candy: 110, pumpkins: 22 },
+            { name: "Franken-sweet", candy: 95, pumpkins: 30 },
+            { name: "The Mummy", candy: 90, pumpkins: 18 },
+            { name: "Howlin' Harry", candy: 88, pumpkins: 12 },
+            { name: "Grim Reaper", candy: 75, pumpkins: 50 },
+            { name: "Ghostly Gus", candy: 70, pumpkins: 5 },
+            { name: "Scary Skelly", candy: 60, pumpkins: 20 }
+        ];
+
+        // NEW: Candy types for houses
+        const CANDY_TYPES = [
+            { name: "KitKat", score: 10 },
+            { name: "M&Ms", score: 8 },
+            { name: "Reese's", score: 12 },
+            { name: "Snickers", score: 15 },
+            { name: "Candy Corn", score: 5 },
+            { name: "Twix", score: 10 },
+            { name: "Skittles", score: 7 }
+        ];
+
+        // Emoji/Asset Mapping
+        const ASSETS = {
+            WALL: '🧱',
+            PATH: '',
+            GRASS: '🟩', // New Grass Tile
+            HOUSE_ON: '🏠',
+            HOUSE_OFF: '🏚️',
+            CANDY: '🍬',
+            PUMPKIN: '🎃',
+            WEB: '🕸️',
+            BAT: '🦇',
+            PLAYER: '🏃',
+        };
+
+        // --- Multi-Street Map Definitions (NEW ACCESSIBLE LAYOUTS) ---
+        // W: Wall, H: House, C: Candy, P: Pumpkin, S: Spider Web, B: Bat Spawn, .: Path, X: Player Start, G: Grass
+        const MAPS = [
+            // Map 1 (Town Square - FIXED)
+            [
+                "WWWWWWWWWWWWWWWWWWWW",
+                "WGGHGGGGGGGGGGHGGGGW",
+                "WGH................HGW",
+                "WG...WWWWWWWWWW...GW",
+                "WG.H.W........W.H.GW",
+                "WG...W.CCCCCC.W...GW",
+                "WG.S.W.C.PP.C.W.S.GW",
+                "WG...W.C....C.W...GW",
+                "WG.P...C.BB.C...P.GW", // Fixed: . instead of W
+                "WG...W.CCCCCC.W...GW",
+                "WG.H.W........W.H.GW",
+                "WG...WWWWWWWWWW...GW",
+                "WG........X........GW",
+                "WG...WWW.WWWWWW...GW",
+                "WG.H.W........W.H.GW",
+                "WG...WPP.PP.PPW...GW",
+                "WGS..WPP.PP.PPW..SGW",
+                "WGH..WWWWWWWWWW..HGW",
+                "WGGHGGGGGGGGGGHGGGGW",
+                "WWWWWWWWWWWWWWWWWWWW",
+            ],
+            // Map 2 (Main Street - FIXED)
+            [
+                "WWWWWWWWWWWWWWWWWWWW",
+                "WGGHGGGGGGGGGGGGHGGW",
+                "WGH....C....C....HGW",
+                "WG................SGW",
+                "WG................CGW",
+                "WGGHGG..WW..GGGGHGGW", // Fixed: . instead of G
+                "WGGHGG..WW..GGGGHGGW", // Fixed: . instead of G
+                "WG......BWW....B....W", // Fixed: . instead of G
+                "WG......CWW....C....W", // Fixed: . instead of G
+                "WG....P.PWW.P...P..W", // Fixed: . instead of G, moved P
+                "WG......CWW....C....W", // Fixed: . instead of G
+                "WG......BWW....B....W", // Fixed: . instead of G
+                "WGGHGG..WW..GGGGHGGW", // Fixed: . instead of G
+                "WGGHGG..WW..GGGGHGGW", // Fixed: . instead of G
+                "WG................CGW",
+                "WG................SGW",
+                "WGX...C....C....C..W",
+                "WGGHGGGGGGGGGGGGHGGW",
+                "WGGHGGGGGGGGGGGGHGGW",
+                "WWWWWWWWWWWWWWWWWWWW",
+            ],
+            // Map 3 (Pumpkin Patch Corner - FIXED)
+            [
+                "WWWWWWWWWWWWWWWWWWWW",
+                "WGGHGGGGGGGGGGHGGGGW",
+                "WGHPGPGPGPGPGPGPGHGW",
+                "WGP................GW",
+                "WGP................GW",
+                "WGP...WWWWWWWWWWWW.W",
+                "WGP...W.H.......C..W",
+                "WGP...W..........B.W",
+                "WG....W.S........C.W",
+                "W.....WWWW.WWWWWWW.W", // Fixed: . instead of W
+                "W..................W",
+                "W....WWWW.WWWWWWW..W", // Fixed: . instead of W
+                "W.H..W........C....W",
+                "W....W.S.......B...W",
+                "W....W.........C...W",
+                "W....WWWWWWWWWWWW..W",
+                "WGX................W",
+                "WGGGGGGGGGGGGGGGGGGW",
+                "WGGGGGGGGGGGGGGGGGGW",
+                "WWWWWWWWWWWWWWWWWWWW",
+            ]
+        ];
+
+
+        // --- Game State ---
+        let map = [];
+        let player = {
+            x: 0, // Current Grid X
+            y: 0, // Current Grid Y
+            pixelX: 0, // Pixel X for drawing
+            pixelY: 0, // Pixel Y for drawing
+            targetX: 0, // Target Grid X for movement
+            targetY: 0, // Target Grid Y for movement
+            isMoving: false,
+            moveSpeed: BASE_MOVE_SPEED,
+            charType: null,
+            name: "Player",
+            isSlowed: false,
+            slowEndTime: 0,
+            emoji: ASSETS.PLAYER
+        };
+        let gameState = {
+            candy: 0,
+            pumpkins: 0,
+            housesVisited: 0,
+            totalHouses: 0,
+            bats: [],
+            totalBats: 0,
+            startTime: 0,
+            timeRemaining: TIME_LIMIT,
+            currentMapIndex: 0
+        };
+        let gameRunning = false;
+        let keys = {}; // Stores which keys are currently pressed
+        let lastTimestamp = 0;
+        let eventLog = []; // NEW: Array to store event messages
+
+
+        // --- Character Data ---
+        const CHARACTERS = {
+            werewolf: { name: "Werewolf 🐺", ability: "Super Speed: Moves 50% faster than normal.", speedMultiplier: 1.5, canPhase: false, emoji: '🐺' },
+            ghost: { name: "Ghost 👻", ability: "Phase: Ignores Spider Web slow effects.", speedMultiplier: 1.0, canPhase: true, emoji: '👻' },
+            vampire: { name: "Vampire 🧛", ability: "Quick Reflexes: Speed is slightly boosted.", speedMultiplier: 1.25, canPhase: false, emoji: '🧛' },
+            mummy: { name: "Mummy 🤕", ability: "Sturdy: Bats only steal 1 candy instead of 5.", speedMultiplier: 1.0, canPhase: false, emoji: '🤕' },
+            zombie: { name: "Zombie 🧟", ability: "Bonus Harvest: Pumpkins collected are worth 2.", speedMultiplier: 1.0, canPhase: false, emoji: '🧟' },
+            witch: { name: "Witch 🧙", ability: "Magical Reserves: Candy collected gives +2 score.", speedMultiplier: 1.0, canPhase: false, emoji: '🧙' },
+            pirate: { name: "Pirate 🏴‍☠️", ability: "Hidden Loot: Starts the game with 10 candy.", startingCandy: 10, speedMultiplier: 1.0, canPhase: false, emoji: '🏴‍☠️' },
+            clown: { name: "Clown 🤡", ability: "Slippery: Spider Web slow duration is halved.", speedMultiplier: 1.0, webDurationMultiplier: 0.5, canPhase: false, emoji: '🤡' },
+            scarecrow: { name: "Scarecrow 🌾", ability: "Intimidation: Bats move 50% slower.", speedMultiplier: 1.0, batSpeedMultiplier: 0.5, canPhase: false, emoji: '🌾' },
+        };
+
+        // --- Helper Functions ---
+
+        /** Converts grid coordinates (g) to canvas pixel coordinates (p) */
+        const gToP = g => g * CELL_SIZE + CELL_SIZE / 2;
+        /** Converts canvas pixel coordinates (p) to grid coordinates (g) */
+        const pToG = p => Math.floor(p / CELL_SIZE);
+
+        function showMessage(text, isGameOver = false) {
+            document.getElementById('message-text').textContent = text;
+            document.getElementById('message-box').style.display = 'block';
+            gameRunning = false; // Always pause game
+
+            const okButton = document.getElementById('message-box-ok-btn');
+            
+            if (isGameOver) {
+                okButton.textContent = "See Scores";
+                okButton.onclick = showLeaderboard;
+            } else {
+                okButton.textContent = "OK";
+                okButton.onclick = () => {
+                    document.getElementById('message-box').style.display = 'none';
+                    gameRunning = true; // Resume game
+                };
+            }
+        }
+
+        function formatTime(seconds) {
+            const min = Math.floor(seconds / 60);
+            const sec = Math.floor(seconds % 60).toString().padStart(2, '0');
+            return `${min}:${sec}`;
+        }
+
+        // --- NEW: Event Log Functions ---
+
+        function addLogMessage(text, type = 'info') {
+            // Add new message to the start of the array
+            eventLog.unshift({ text, type });
+
+            // Trim the log to the max size
+            if (eventLog.length > EVENT_LOG_MAX_SIZE) {
+                eventLog.pop();
+            }
+
+            updateEventLogUI();
+        }
+
+        function updateEventLogUI() {
+            const logContainer = document.getElementById('event-log-container');
+            logContainer.innerHTML = ''; // Clear the log
+
+            // Loop from newest to oldest (which is now just 0 to end)
+            eventLog.forEach(event => {
+                const p = document.createElement('p');
+                p.textContent = event.text;
+
+                // Apply styles based on event type
+                switch (event.type) {
+                    case 'house':
+                        p.className = 'text-yellow-400 font-medium text-sm mb-1';
+                        break;
+                    case 'bat':
+                        p.className = 'text-red-500 font-bold text-sm mb-1';
+                        break;
+                    case 'web':
+                        p.className = 'text-purple-400 italic text-sm mb-1';
+                        break;
+                    case 'gameover':
+                        p.className = 'text-red-600 font-extrabold text-lg mb-1';
+                        break;
+                    case 'info':
+                    default:
+                        p.className = 'text-gray-300 text-sm mb-1';
+                        break;
+                }
+                logContainer.appendChild(p);
+            });
+        }
+
+        // NEW: Leaderboard Display Function
+        function showLeaderboard() {
+            // Hide message box
+            document.getElementById('message-box').style.display = 'none';
+
+            // Hide game UI (canvas + event log)
+            document.querySelector('.flex.md\\:flex-row.gap-4').style.display = 'none';
+            
+            // Get player's score
+            const charData = CHARACTERS[player.charType];
+            const playerName = `${player.name} the ${charData.name.split(' ')[0]} ${charData.emoji}`;
+            const playerScore = {
+                name: playerName,
+                candy: gameState.candy,
+                pumpkins: gameState.pumpkins,
+                isPlayer: true // Flag to highlight
+            };
+
+            // Create new leaderboard
+            let scores = [...DEFAULT_LEADERBOARD, playerScore];
+
+            // Sort by candy (descending), then pumpkins (descending)
+            scores.sort((a, b) => {
+                if (a.candy !== b.candy) {
+                    return b.candy - a.candy;
+                }
+                return b.pumpkins - a.pumpkins;
+            });
+
+            // Get top 10
+            const top10 = scores.slice(0, 10);
+
+            // Populate table
+            const tableBody = document.getElementById('leaderboard-table-body');
+            tableBody.innerHTML = ''; // Clear old data
+
+            top10.forEach((score, index) => {
+                const row = document.createElement('tr');
+                // Highlight the player's row
+                row.className = score.isPlayer ? 'bg-yellow-600 text-black font-bold' : 'bg-gray-800';
+                
+                row.innerHTML = `
+                    <td class="p-3 border-t border-gray-600">${index + 1}</td>
+                    <td class="p-3 border-t border-gray-600">${score.name}</td>
+                    <td class="p-3 border-t border-gray-600">${score.candy}</td>
+                    <td class="p-3 border-t border-gray-600">${score.pumpkins}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+
+            // Show leaderboard
+            document.getElementById('leaderboard-container').classList.remove('hidden');
+        }
+
+
+        // --- Initialization and Map Setup ---
+
+        function setupMap(mapData, resetHouses = true) {
+            // Reset houses and bats for the new map
+            if (resetHouses) {
+                gameState.housesVisited = 0;
+                gameState.totalHouses = 0;
+            }
+
+            map = mapData.map((row, y) => row.split('').map((cell, x) => {
+                if (cell === 'H') gameState.totalHouses++;
+                return cell;
+            }));
+
+            // Initialize bats for this map
+            gameState.bats = [];
+            mapData.forEach((row, y) => row.split('').forEach((cell, x) => {
+                if (cell === 'B') {
+                    // Bats are randomly placed and move randomly
+                    gameState.bats.push({
+                        x: x, // Grid position X
+                        y: y, // Grid position Y
+                        pixelX: gToP(x), // Pixel X for drawing
+                        pixelY: gToP(y), // Pixel Y for drawing
+                        dx: (Math.random() > 0.5 ? 1 : -1),
+                        dy: (Math.random() > 0.5 ? 1 : -1),
+                        active: true,
+                        stole: false,
+                        fleeing: false // New state for fleeing animation
+                    });
+                    map[y][x] = '.'; // Bats spawn on a path
+                }
+            }));
+        }
+
+        function initializeGame() {
+            // Pick a random starting map (Street 1)
+            gameState.currentMapIndex = 0;
+            setupMap(MAPS[gameState.currentMapIndex], true);
+
+            // Find start position ('X' or a random path cell if 'X' is removed)
+            let startX = 1, startY = 1; // Default to top-left corner
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if (map[y][x] === 'X') {
+                        startX = x;
+                        startY = y;
+                        map[y][x] = '.'; // Convert start point to path
+                    }
+                }
+            }
+            // Set grid position
+            player.x = startX;
+            player.y = startY;
+            // Set pixel position to match grid
+            player.pixelX = gToP(player.x);
+            player.pixelY = gToP(player.y);
+            // Set character-specific move speed
+            player.moveSpeed = BASE_MOVE_SPEED * (CHARACTERS[player.charType].speedMultiplier || 1);
+
+            gameState.startTime = Date.now();
+            gameState.timeRemaining = TIME_LIMIT;
+
+            // Add first log message
+            addLogMessage('🎃 Happy Halloween! Time to collect some candy!', 'info');
+        }
+
+        // --- Drawing and Rendering ---
+
+        function drawCell(x, y, asset) {
+            const px = x * CELL_SIZE;
+            const py = y * CELL_SIZE;
+
+            ctx.font = `${CELL_SIZE * 0.8}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(asset, px + CELL_SIZE / 2, py + CELL_SIZE / 2);
+        }
+
+        function drawBat(bat) {
+            ctx.font = `${CELL_SIZE * 0.8}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(ASSETS.BAT, bat.pixelX, bat.pixelY);
+        }
+
+        function drawMap() {
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const cell = map[y][x];
+                    let asset = ASSETS.PATH;
+
+                    // Draw base color
+                    if (cell === 'G') {
+                        ctx.fillStyle = '#003300'; // Dark green for grass
+                    } else if (cell === 'W') {
+                        ctx.fillStyle = '#333333'; // Wall color
+                    } else {
+                        ctx.fillStyle = '#0a0a0a'; // Path color
+                    }
+                    ctx.fillRect(x * CELL_SIZE, y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+
+
+                    // Draw assets on top
+                    switch (cell) {
+                        case 'W': asset = ASSETS.WALL; break;
+                        case 'G': asset = ''; break; // Grass is just color
+                        case 'H': asset = ASSETS.HOUSE_ON; break;
+                        case 'V': asset = ASSETS.HOUSE_OFF; break;
+                        case 'C': asset = ASSETS.CANDY; break;
+                        case 'P': asset = ASSETS.PUMPKIN; break;
+                        case 'S': asset = ASSETS.WEB; break;
+                        case 'X': // Player Start - treat as path
+                        case '.': asset = ASSETS.PATH; break;
+                    }
+
+                    if (asset) {
+                        drawCell(x, y, asset);
+                    }
+                }
+            }
+        }
+
+        function drawPlayer() {
+            // Draw a temporary background circle for the player for better visibility
+            ctx.beginPath();
+            ctx.arc(player.pixelX, player.pixelY, CELL_SIZE * 0.4, 0, Math.PI * 2);
+            ctx.fillStyle = player.isSlowed ? 'rgba(255, 0, 0, 0.5)' : 'rgba(255, 255, 0, 0.5)';
+            ctx.fill();
+
+            // Draw character emoji
+            ctx.font = `${CELL_SIZE * 0.6}px Arial`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(player.emoji, player.pixelX, player.pixelY);
+        }
+
+        function drawBats() {
+            gameState.bats.filter(b => b.active).forEach(bat => {
+                drawBat(bat);
+            });
+        }
+
+        function updateUI() {
+            document.getElementById('candy-score').textContent = gameState.candy;
+            document.getElementById('pumpkin-score').textContent = gameState.pumpkins;
+            document.getElementById('char-name').textContent = `${player.name} (${player.charType ? CHARACTERS[player.charType].name : 'N/A'})`;
+            document.getElementById('time-remaining').textContent = formatTime(gameState.timeRemaining);
+
+            // REMOVED: Old game-status logic
+            /*
+            let status = 'Collecting...';
+            if (player.isSlowed) {
+                status = '🕸️ SLOWED by Spider Web! 🕸️';
+                document.getElementById('game-status').className = 'text-center h-6 text-sm italic font-bold text-red-500';
+            } else {
+                document.getElementById('game-status').className = 'text-center h-6 text-sm italic text-gray-400';
+            }
+            document.getElementById('game-status').textContent = status;
+            */
+
+            // Highlight time when low
+            if (gameState.timeRemaining <= 10) {
+                document.getElementById('time-remaining').classList.add('text-red-600', 'font-extrabold');
+            } else {
+                document.getElementById('time-remaining').classList.remove('text-red-600', 'font-extrabold');
+            }
+        }
+
+        // --- Movement and Collision Logic ---
+
+        function isWall(x, y) {
+            // Takes integer grid coordinates
+            if (x < 0 || x >= GRID_SIZE || y < 0 || y >= GRID_SIZE) return false;
+            // Check if map[y] exists before accessing map[y][x]
+            return map[y] && map[y][x] === 'W';
+        }
+
+        function handleBoundaryCross(targetX, targetY) {
+            let newMapIndex = gameState.currentMapIndex;
+            let newX = targetX;
+            let newY = targetY;
+            let crossed = false;
+
+            // Check if player has exited the map boundaries
+            if (targetX < 0) { // Left exit
+                newMapIndex = (gameState.currentMapIndex - 1 + MAPS.length) % MAPS.length; // Go to previous map
+                newX = GRID_SIZE - 1; // Teleport to right side
+                crossed = true;
+            } else if (targetX >= GRID_SIZE) { // Right exit
+                newMapIndex = (gameState.currentMapIndex + 1) % MAPS.length; // Go to next map
+                newX = 0; // Teleport to left side
+                crossed = true;
+            } else if (targetY < 0) { // Top exit
+                newMapIndex = (gameState.currentMapIndex - 1 + MAPS.length) % MAPS.length; // Go to previous map
+                newY = GRID_SIZE - 1; // Teleport to bottom side
+                crossed = true;
+            } else if (targetY >= GRID_SIZE) { // Bottom exit
+                newMapIndex = (gameState.currentMapIndex + 1) % MAPS.length; // Go to next map
+                newY = 0; // Teleport to top side
+                crossed = true;
+            }
+
+            // Load new map if index changed
+            if (crossed) {
+                gameState.currentMapIndex = newMapIndex;
+                setupMap(MAPS[gameState.currentMapIndex], false);
+                // Set new grid position
+                player.x = newX;
+                player.y = newY;
+                // Snap pixel position to new grid
+                player.pixelX = gToP(player.x);
+                player.pixelY = gToP(player.y);
+                // No message box!
+            }
+            return crossed;
+        }
+
+        /** Handles player movement interpolation */
+        function updatePlayerPosition() {
+            if (!player.isMoving) return;
+
+            const targetPixelX = gToP(player.targetX);
+            const targetPixelY = gToP(player.targetY);
+            
+            // Adjust speed based on slow effect
+            const speed = player.isSlowed ? player.moveSpeed * SLOW_MULTIPLIER : player.moveSpeed;
+
+            // Move pixelX towards target
+            if (player.pixelX < targetPixelX) {
+                player.pixelX = Math.min(player.pixelX + speed, targetPixelX);
+            } else if (player.pixelX > targetPixelX) {
+                player.pixelX = Math.max(player.pixelX - speed, targetPixelX);
+            }
+
+            // Move pixelY towards target
+            if (player.pixelY < targetPixelY) {
+                player.pixelY = Math.min(player.pixelY + speed, targetPixelY);
+            } else if (player.pixelY > targetPixelY) {
+                player.pixelY = Math.max(player.pixelY - speed, targetPixelY);
+            }
+
+            // Check if arrived at target
+            if (player.pixelX === targetPixelX && player.pixelY === targetPixelY) {
+                player.isMoving = false;
+                player.x = player.targetX; // Update grid position
+                player.y = player.targetY;
+
+                // Check for interactions on the tile grid *after* arriving
+                checkTileInteractions(player.x, player.y);
+            }
+        }
+
+        /** Checks for keyboard input and initiates a move */
+        function handleMovementInput() {
+            if (player.isMoving) return; // Don't take new input while already moving
+
+            let targetX = player.x;
+            let targetY = player.y;
+
+            if (keys['arrowup'] || keys['w']) targetY--;
+            else if (keys['arrowdown'] || keys['s']) targetY++;
+            else if (keys['arrowleft'] || keys['a']) targetX--;
+            else if (keys['arrowright'] || keys['d']) targetX++;
+            else return; // No movement key pressed
+
+            // Try to move to the new target tile
+            tryMove(targetX, targetY);
+        }
+
+        /** Attempts to set a new target tile for the player */
+        function tryMove(targetX, targetY) {
+            // First, check if the move is a boundary cross
+            if (handleBoundaryCross(targetX, targetY)) {
+                return; // Boundary cross handled, stop here
+            }
+
+            // Second, check for wall collision
+            if (isWall(targetX, targetY)) {
+                return; // Can't move into a wall
+            }
+
+            // Check for web interaction
+            const cell = map[targetY][targetX];
+            const charData = CHARACTERS[player.charType];
+            if (cell === 'S' && !charData.canPhase && !player.isSlowed) {
+                player.isSlowed = true;
+                const duration = charData.webDurationMultiplier ? SLOW_DURATION * charData.webDurationMultiplier : SLOW_DURATION;
+                player.slowEndTime = Date.now() + duration;
+                addLogMessage('🕸️ SLOWED by a Spider Web!', 'web'); // NEW: Log event
+            }
+
+            // All checks passed, set as valid move
+            player.targetX = targetX;
+            player.targetY = targetY;
+// ADVANCED_LOGIC: // This label was causing an issue, it's removed.
+            player.isMoving = true;
+        }
+
+
+        function updateBatPositions() {
+            const batCharData = CHARACTERS[player.charType];
+            const baseWanderSpeed = BAT_WANDER_SPEED * (batCharData.batSpeedMultiplier || 1);
+
+            gameState.bats.filter(b => b.active).forEach(bat => {
+                
+                let batSpeed; // Reset speed for each bat
+                
+                if (bat.fleeing) {
+                    batSpeed = BAT_FLEE_SPEED; // Use fast flee speed
+                    // Bat flies towards the top-right corner (off-screen)
+                    bat.dx = 1;
+                    bat.dy = -1;
+                } else {
+                    batSpeed = baseWanderSpeed; // Use normal wander speed
+                }
+                
+                let newPixelX = bat.pixelX + bat.dx * batSpeed * 10; // Bats move based on pixels
+                let newPixelY = bat.pixelY + bat.dy * batSpeed * 10;
+                
+                const targetGridX = pToG(newPixelX);
+                const targetGridY = pToG(newPixelY);
+
+                // Collision detection for bats against walls
+                if (!bat.fleeing && isWall(targetGridX, targetGridY)) {
+                    const currentGridX = pToG(bat.pixelX);
+                    const currentGridY = pToG(bat.pixelY);
+
+                    // Reverse direction based on which wall was hit
+                    if (isWall(targetGridX, currentGridY)) bat.dx *= -1;
+                    if (isWall(currentGridX, targetGridY)) bat.dy *= -1;
+
+                    // Recalculate
+                    newPixelX = bat.pixelX + bat.dx * batSpeed * 10;
+                    newPixelY = bat.pixelY + bat.dy * batSpeed * 10;
+                }
+                
+                bat.pixelX = newPixelX;
+                bat.pixelY = newPixelY;
+
+                // Update grid position for collision checks
+                bat.x = pToG(bat.pixelX);
+                bat.y = pToG(bat.pixelY);
+
+                // Deactivate bat if it has fled off-screen
+                if (bat.fleeing && (bat.pixelX > CANVAS_SIZE || bat.pixelY < 0)) {
+                    bat.active = false;
+                }
+            });
+        }
+
+        /** Checks for tile-based interactions (candy, house) */
+        function checkTileInteractions(gx, gy) {
+            if (map[gy] && map[gy][gx]) {
+                const cell = map[gy][gx];
+                const charData = CHARACTERS[player.charType];
+
+                switch (cell) {
+                    case 'H': // House (Unvisited)
+                        // NEW: Random candy logic
+                        const candy = CANDY_TYPES[Math.floor(Math.random() * CANDY_TYPES.length)];
+                        gameState.candy += candy.score;
+                        gameState.housesVisited++;
+                        map[gy][gx] = 'V'; // 'V' for Visited (light off)
+                        addLogMessage(`🏠 Got ${candy.name}! +${candy.score} Candy`, 'house');
+                        break;
+                    case 'C': // Candy
+                        const candyAmount = (player.charType === 'witch' ? 2 : 1);
+                        gameState.candy += candyAmount;
+                        map[gy][gx] = '.';
+                        addLogMessage(`🍬 Found candy! +${candyAmount}`, 'info');
+                        break;
+                    case 'P': // Pumpkin
+                        const pumpkinAmount = (player.charType === 'zombie' ? 2 : 1);
+                        gameState.pumpkins += pumpkinAmount;
+                        map[gy][gx] = '.';
+                        addLogMessage(`🎃 Found a pumpkin! +${pumpkinAmount}`, 'info');
+                        break;
+                    // Web interaction is handled in tryMove
+                }
+            }
+        }
+
+        /** Checks for dynamic interactions (bats) every frame */
+        function checkDynamicInteractions() {
+            // Bat Interaction (Collision with Bat)
+            // Use player's grid position for collision
+            const playerGridX = player.x;
+            const playerGridY = player.y;
+
+            gameState.bats.filter(b => b.active && !b.fleeing).forEach(bat => {
+                const batGridX = bat.x;
+                const batGridY = bat.y;
+
+                if (batGridX === playerGridX && batGridY === playerGridY && !bat.stole) {
+                    const charData = CHARACTERS[player.charType];
+                    let stolenAmount = BAT_CANDY_STEAL;
+
+                    if (player.charType === 'mummy' && gameState.candy > 0) {
+                        stolenAmount = 1;
+                    }
+
+                    // Ensure player has candy to steal
+                    stolenAmount = Math.min(gameState.candy, stolenAmount);
+
+                    gameState.candy = Math.max(0, gameState.candy - stolenAmount);
+                    bat.stole = true;
+                    bat.fleeing = true; // Bat starts fleeing!
+
+                    if (stolenAmount > 0) {
+                        showMessage(`🦇 A Bat stole ${stolenAmount} candy! It's flying away!`);
+                        addLogMessage(`🦇 A Bat stole ${stolenAmount} candy!`, 'bat'); // NEW: Log event
+                    } else {
+                        // This case now handles Mummy block
+                        showMessage(`🦇 A Bat tried to steal your candy, but your Mummy wrapping protected you!`);
+                        addLogMessage(`🦇 Bat attack blocked by Mummy costume!`, 'info'); // NEW: Log event
+                    }
+                }
+            });
+        }
+
+        // --- Main Game Loop ---
+
+        function gameLoop(timestamp) {
+            const deltaTime = timestamp - lastTimestamp;
+            lastTimestamp = timestamp;
+
+            // Update Time Remaining every frame
+            const timeElapsed = (Date.now() - gameState.startTime) / 1000;
+            gameState.timeRemaining = Math.max(0, TIME_LIMIT - timeElapsed);
+
+            // Check slow duration
+            if (player.isSlowed && Date.now() > player.slowEndTime) {
+                player.isSlowed = false;
+                addLogMessage('💨 Speed returned to normal!', 'info'); // NEW: Log event
+            }
+            
+            // Adjust move speed if slowed (this is now pixels-per-frame)
+            const speedMultiplier = player.isSlowed ? SLOW_MULTIPLIER : 1;
+            player.moveSpeed = BASE_MOVE_SPEED * (CHARACTERS[player.charType].speedMultiplier || 1) * speedMultiplier;
+
+
+            if (gameRunning) {
+                // Game Over condition based on time
+                if (gameState.timeRemaining <= 0) {
+                    gameRunning = false;
+                    const endMessage = `⏱️ TIME'S UP! Game Over! ⏱️\n\nFinal Score: ${gameState.candy} Candy and ${gameState.pumpkins} Pumpkins.`;
+                    showMessage(endMessage, true); // Pass 'true' for game over
+                    addLogMessage(`⏱️ TIME'S UP! Game Over!`, 'gameover'); // NEW: Log event
+                    addLogMessage(`Final Score: ${gameState.candy} Candy, ${gameState.pumpkins} Pumpkins.`, 'gameover');
+                }
+
+                handleMovementInput(); // Check for new moves
+                updatePlayerPosition(); // Interpolate movement
+                updateBatPositions(); // Move bats
+                checkDynamicInteractions(); // Check for bat collisions
+                updateUI();
+            }
+
+            // Clear canvas
+            ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+
+            // Draw everything
+            drawMap();
+            drawBats();
+            drawPlayer();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        // --- Input Handling ---
+
+        function setPlayerDirection(event) {
+            // Only store key state
+            keys[event.key.toLowerCase()] = event.type === 'keydown';
+        }
+
+        document.addEventListener('keydown', setPlayerDirection);
+        document.addEventListener('keyup', setPlayerDirection);
+
+        // --- Character Selection Logic ---
+
+        let selectedChar = null;
+        const charOptionsContainer = document.getElementById('character-options');
+        const startGameBtn = document.getElementById('start-game-btn');
+        const charAbilityDesc = document.getElementById('char-ability-desc');
+        const nameInput = document.getElementById('player-name-input');
+
+        const checkStartReady = () => {
+            startGameBtn.disabled = !selectedChar || nameInput.value.trim() === '';
+        };
+        
+        nameInput.addEventListener('input', checkStartReady);
+
+        Object.keys(CHARACTERS).forEach(key => {
+            const char = CHARACTERS[key];
+            const card = document.createElement('div');
+            card.className = 'char-card bg-gray-700';
+            card.setAttribute('data-char', key);
+            card.innerHTML = `<div class="text-4xl mb-1">${char.emoji}</div><div class="font-semibold">${char.name.split(' ')[0]}</div>`;
+
+            card.addEventListener('click', () => {
+                document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+                card.classList.add('selected');
+                selectedChar = key;
+                charAbilityDesc.textContent = char.ability;
+                checkStartReady();
+            });
+            charOptionsContainer.appendChild(card);
+        });
+
+        startGameBtn.addEventListener('click', () => {
+            const playerName = nameInput.value.trim();
+            if (!selectedChar || !playerName) return;
+
+            const charData = CHARACTERS[selectedChar];
+
+            // Set player properties based on selection
+            player.charType = selectedChar;
+            player.emoji = charData.emoji;
+            player.name = playerName;
+            // moveSpeed is set in initializeGame
+            gameState.candy = charData.startingCandy || 0;
+
+            // Hide modal and start game
+            document.getElementById('char-select-modal').style.display = 'none';
+            initializeGame();
+            gameRunning = true;
+            updateUI();
+
+            // Start the main loop
+            requestAnimationFrame(gameLoop);
+        });
+
+        // Add event listener for the new Play Again button
+        document.getElementById('play-again-btn').addEventListener('click', () => {
+            location.reload(); // Easiest way to reset the entire game
+        });
+
+// Initialize UI AND Log before game loop starts
+        updateUI();
+        updateEventLogUI();
+
+    </script>
+</body>
+</html>
+
+
+
