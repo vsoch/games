@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>The Reaper's Choice: Historical Demise</title>
+    <style>
+        :root {
+            --bg-color: #0d0d0d;
+            --card-bg: #1a1a1a;
+            --accent-red: #ff3e3e;
+            --accent-blue: #3e8bff;
+            --text-main: #e0e0e0;
+            --text-dim: #a0a0a0;
+            --font-main: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: var(--font-main);
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            color: var(--accent-red);
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            margin-bottom: 5px;
+        }
+
+        .subtitle {
+            color: var(--text-dim);
+            font-style: italic;
+        }
+
+        #game-container {
+            max-width: 1000px;
+            width: 100%;
+        }
+
+        .options-wrapper {
+            display: flex;
+            gap: 20px;
+            position: relative;
+            margin-bottom: 30px;
+        }
+
+        .option-card {
+            background: var(--card-bg);
+            border: 2px solid #333;
+            flex: 1;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: transform 0.2s, border-color 0.2s;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 200px;
+        }
+
+        .option-card:hover {
+            border-color: #666;
+            transform: translateY(-5px);
+        }
+
+        .option-a:hover { box-shadow: 0 0 20px rgba(255, 62, 62, 0.2); }
+        .option-b:hover { box-shadow: 0 0 20px rgba(62, 139, 255, 0.2); }
+
+        .option-title {
+            font-size: 1.5rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
+        .vs-circle {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #000;
+            border: 2px solid #fff;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            z-index: 5;
+        }
+
+        /* Results Area */
+        .fact-section {
+            display: none;
+            background: #111;
+            border: 1px solid #333;
+            padding: 25px;
+            margin-top: 20px;
+            animation: slideDown 0.4s ease-out;
+        }
+
+        .fact-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+        }
+
+        .fact-column h4 {
+            margin-top: 0;
+            font-size: 1.1rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .fact-column.a h4 { color: var(--accent-red); }
+        .fact-column.b h4 { color: var(--accent-blue); }
+
+        .fact-text {
+            font-size: 0.95rem;
+            line-height: 1.6;
+            color: var(--text-dim);
+        }
+
+        /* Controls */
+        .controls {
+            text-align: center;
+            margin-top: 30px;
+        }
+
+        .btn {
+            background: #fff;
+            color: #000;
+            border: none;
+            padding: 12px 30px;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            display: none;
+        }
+
+        .btn:hover { background: #ccc; }
+
+        /* Preference Marker */
+        .my-pick {
+            display: none;
+            margin-top: 15px;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 0.8rem;
+            letter-spacing: 2px;
+            color: #00ff00;
+        }
+
+        .selected { border-width: 4px; pointer-events: none; }
+        .selected.option-a { border-color: var(--accent-red); }
+        .selected.option-b { border-color: var(--accent-blue); }
+
+        @keyframes slideDown {
+            from { opacity: 0; transform: translateY(-10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        @media (max-width: 768px) {
+            .options-wrapper { flex-direction: column; }
+            .vs-circle { position: relative; top: 0; left: 0; transform: none; margin: -10px auto; }
+            .fact-grid { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+<body>
+
+<header>
+    <h1>Dan's Demise</h1>
+    <p class="subtitle">Select your preferred method of historical departure.</p>
+</header>
+
+<div id="game-container">
+    <div class="options-wrapper">
+        <div class="option-card option-a" id="card-a" onclick="selectOption('a')">
+            <div class="option-title" id="title-a">Loading...</div>
+            <div class="my-pick" id="pick-a">✦ Your Preference ✦</div>
+        </div>
+
+        <div class="vs-circle">VS</div>
+
+        <div class="option-card option-b" id="card-b" onclick="selectOption('b')">
+            <div class="option-title" id="title-b">Loading...</div>
+            <div class="my-pick" id="pick-b">✦ Your Preference ✦</div>
+        </div>
+    </div>
+
+    <div class="fact-section" id="fact-section">
+        <div class="fact-grid">
+            <div class="fact-column a">
+                <h4 id="fact-title-a">Option A</h4>
+                <div class="fact-text" id="fact-text-a">...</div>
+            </div>
+            <div class="fact-column b">
+                <h4 id="fact-title-b">Option B</h4>
+                <div class="fact-text" id="fact-text-b">...</div>
+            </div>
+        </div>
+        <div class="controls">
+            <button class="btn" id="next-btn" onclick="nextQuestion()">Next Dilemma</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const dilemmas = [
+        {
+            a: "The Brazen Bull",
+            aFact: "Invented in Ancient Greece, this hollow bronze statue was heated by a fire beneath. The victim was locked inside and roasted. A complex system of pipes turned the victim's screams into the sound of an angry bull's bellowing for the amusement of onlookers.",
+            b: "Scaphism",
+            bFact: "Known as 'The Boats,' this ancient Persian torture involved trapping a victim between two narrow rowboats. They were force-fed milk and honey until they had severe diarrhea, then left on a stagnant pond. Insects would breed in the filth and slowly consume the living victim over weeks."
+        },
+        {
+            a: "The Blood Eagle",
+            aFact: "A legendary Viking execution. The victim's back was sliced open, the ribs were severed from the spine and pulled outward to resemble wings, and the lungs were pulled through the openings. Salt was then applied to the exposed organs.",
+            b: "The Breaking Wheel",
+            bFact: "Common in medieval Europe. The executioner used a heavy wagon wheel to systematically smash every major bone in the victim's body. The shattered limbs were then woven through the spokes of the wheel and hoisted onto a pole for birds to eat.",
+        },
+        {
+            a: "A Vat of Malmsey Wine",
+            aFact: "George Plantagenet, Duke of Clarence, was allegedly executed this way in 1478. He was given a choice of how to die and chose to be drowned in a large barrel (a 'butt') of his favorite sweet wine.",
+            b: "A Pit of Ash",
+            bFact: "A Persian method for high-status criminals. The victim was thrown into a tower filled with wood ash. Mechanical fans or wheels kept the ash swirling, causing the victim to slowly suffocate as they inhaled the fine powder over many hours.",
+        },
+        {
+            a: "The Iron Maiden",
+            aFact: "Though likely a 19th-century 'horror' invention rather than a real medieval device, the myth describes a sarcophagus lined with strategically placed spikes. They were designed to miss vital organs, ensuring the victim bled out slowly over several days in total darkness.",
+            b: "The Pear of Anguish",
+            bFact: "A metal, pear-shaped device that was inserted into a bodily orifice. A screw mechanism would cause the 'leaves' of the pear to expand outward, causing massive internal damage and bone-shattering pressure.",
+        },
+        {
+            a: "Molten Gold",
+            aFact: "The Roman General Crassus was allegedly executed by the Parthians by having molten gold poured down his throat. It served as a symbolic punishment for his legendary greed and thirst for wealth.",
+            b: "Molten Lead",
+            bFact: "During the Inquisition, molten lead was occasionally poured into the ears or mouths of heretics. It was also a freak cause of death for lighthouse keepers, such as Henry Hall, who accidentally swallowed 7 ounces of it during a fire.",
+        },
+        {
+            a: "The Dancing Plague",
+            aFact: "In 1518, hundreds of people in Strasbourg began dancing uncontrollably for weeks. Many died from heart attacks, strokes, and sheer exhaustion. The cause remains a mystery—possibly ergot poisoning or mass psychogenic illness.",
+            b: "The Sweating Sickness",
+            bFact: "A mysterious disease that ravaged Tudor England. It struck with terrifying speed; a person could be perfectly healthy at breakfast and dead by dinner, literally drowning in their own profuse, foul-smelling sweat.",
+        },
+        {
+            a: "Bamboo Growth",
+            aFact: "Used in parts of East and Southeast Asia. Bamboo can grow up to 3 feet in 24 hours. A victim was tied down over young, sharpened bamboo shoots. The plants would grow directly through the victim's body over the course of several days.",
+            b: "The Rat Bucket",
+            bFact: "A bucket filled with rats was placed upside down on the victim's stomach. The bottom of the bucket was then heated. To escape the heat, the rats would burrow into the only soft surface available: the victim's abdomen.",
+        },
+        {
+            a: "The Great Beer Flood",
+            aFact: "In 1814 London, a massive vat containing 135,000 gallons of porter beer burst. A 15-foot wave of beer destroyed buildings and drowned 8 people. One victim reportedly died of alcohol poisoning days later from 'cleaning up' the streets.",
+            b: "The Great Molasses Flood",
+            bFact: "In 1919 Boston, a tank containing 2.3 million gallons of molasses exploded. The 25-foot wave moved at 35mph. The syrup was so thick and cold that victims were trapped like flies in amber, unable to swim or breathe.",
+        },
+        {
+            a: "Falling Tortoise",
+            aFact: "The Greek playwright Aeschylus was allegedly killed when an eagle dropped a tortoise on his bald head. The bird reportedly mistook his head for a rock and wanted to crack the tortoise's shell open.",
+            b: "Excessive Laughter",
+            bFact: "The philosopher Chrysippus allegedly died of laughter in 206 BC. After seeing a donkey eat his fermented figs, he told his slave to give the donkey pure wine to wash them down, then found his own joke so funny he died from the fit.",
+        },
+        {
+            a: "The Oubliette",
+            aFact: "A specialized dungeon shaped like a narrow vertical bottle. The name comes from the French 'oublier' (to forget). Prisoners were dropped in and simply forgotten, left to die of thirst or hunger in a space too small to sit down.",
+            b: "The Gibbet",
+            bFact: "A human-shaped iron cage. The victim was locked inside and hung from a high post in public. They were left to die of exposure or starvation, and their body remained there for years as a warning to others.",
+        },
+        {
+            a: "Death by 1,000 Cuts",
+            aFact: "Known as Lingchi in China, this was a form of execution for high crimes. The executioner would methodically remove small portions of the body over a long period, attempting to keep the victim alive for as long as possible.",
+            b: "Execution by Cannon",
+            bFact: "Commonly used by the British during the Indian Rebellion of 1857. The victim was tied across the mouth of a cannon, which was then fired. It was an instantaneous but incredibly messy method intended to deny the victim a funeral.",
+        },
+        {
+            a: "The Spanish Donkey",
+            aFact: "A triangular wooden wedge with the sharp edge facing up. The victim was made to straddle the 'donkey' while heavy weights were attached to their ankles, slowly pulling them down and splitting their body.",
+            b: "The Heretic's Fork",
+            bFact: "A metal device with two-pronged forks at each end. One end was tucked under the chin and the other into the sternum. It prevented the victim from sleeping or lowering their head, as any movement would pierce the throat.",
+        },
+        {
+            a: "Keelhauling",
+            aFact: "A naval punishment where a sailor was tied to a rope and dragged underneath the ship from one side to the other. If they didn't drown, they were often flayed alive by the thousands of sharp barnacles growing on the hull.",
+            b: "Walking the Plank",
+            bFact: "While rare in actual history, it was a terrifying psychological torture. Blindfolded victims were forced to walk into the open ocean while pirates watched, often in shark-infested waters where the wait for death was agonizing.",
+        },
+        {
+            a: "The Demon Core",
+            aFact: "In 1946, physicist Louis Slotin was working with a plutonium core when his screwdriver slipped. A massive burst of blue light (Cherenkov radiation) hit him. He died 9 days later as his internal organs literally melted from radiation poisoning.",
+            b: "Byford Dolphin Implosion",
+            bFact: "Four divers died instantly when a diving bell's pressure was accidentally released. The change from 9 atmospheres to 1 was so violent that one diver was forced through a 24-inch opening, fragmenting his body instantly.",
+        },
+        {
+            a: "White Torture",
+            aFact: "A form of sensory deprivation where everything is white—the room, the clothes, the food (unseasoned white rice). There is total silence. Victims lose their identity and sanity within days, often begging to be killed just to see a color.",
+            b: "The Scold's Bridle",
+            bFact: "A metal muzzle or cage for the head. It included a 'tongue plate' covered in spikes. If the victim tried to speak, the spikes would pierce their tongue. It was used in the 16th century to punish 'shrewish' women in public.",
+        }
+        // ... (Remaining scenarios can be added here)
+    ];
+
+    let currentIdx = 0;
+    // Shuffle the order
+    dilemmas.sort(() => Math.random() - 0.5);
+
+    function loadQuestion() {
+        const d = dilemmas[currentIdx];
+        document.getElementById('title-a').innerText = d.a;
+        document.getElementById('title-b').innerText = d.b;
+        document.getElementById('fact-title-a').innerText = d.a;
+        document.getElementById('fact-title-b').innerText = d.b;
+        document.getElementById('fact-text-a').innerText = d.aFact;
+        document.getElementById('fact-text-b').innerText = d.bFact;
+
+        // Reset UI
+        document.getElementById('fact-section').style.display = 'none';
+        document.getElementById('next-btn').style.display = 'none';
+        document.getElementById('pick-a').style.display = 'none';
+        document.getElementById('pick-b').style.display = 'none';
+        document.getElementById('card-a').classList.remove('selected');
+        document.getElementById('card-b').classList.remove('selected');
+    }
+
+    function selectOption(choice) {
+        document.getElementById('card-a').classList.add('selected');
+        document.getElementById('card-b').classList.add('selected');
+        
+        document.getElementById(`pick-${choice}`).style.display = 'block';
+        document.getElementById('fact-section').style.display = 'block';
+        document.getElementById('next-btn').style.display = 'inline-block';
+        
+        // Scroll to the facts
+        window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
+    }
+
+    function nextQuestion() {
+        currentIdx++;
+        if (currentIdx < dilemmas.length) {
+            loadQuestion();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        } else {
+            document.getElementById('game-container').innerHTML = `
+                <div style="text-align:center; padding: 50px;">
+                    <h2>The Ledger is Full</h2>
+                    <p>You have navigated the most gruesome exits in human history.</p>
+                    <button class="btn" style="display:inline-block" onclick="location.reload()">Start Over</button>
+                </div>
+            `;
+        }
+    }
+
+    // Initialize
+    loadQuestion();
+</script>
+
+</body>
+</html>
