@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pleasanton to Pac Pipes Bingo & Trivia</title>
+    <style>
+        :root {
+            var(--bg-gradient): linear-gradient(135deg, #2b5876 0%, #4e4376 100%);
+            --bg-gradient: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            --board-bg: rgba(255, 255, 255, 0.15);
+            --cell-bg: #ffffff;
+            --cell-text: #2d3436;
+            --stamped-bg: #00b894; 
+            --stamped-text: #ffffff;
+            --shadow-color: #94a3b8;
+            --stamped-shadow: #008f73;
+            --trivia-q-bg: #6c5ce7;
+            --trivia-q-shadow: #4834d4;
+        }
+
+        body {
+            font-family: 'Avenir Next', 'Segoe UI', Helvetica, Arial, sans-serif;
+            background: var(--bg-gradient);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0;
+            padding: 20px 10px 80px 10px; /* Large bottom padding for scrolling */
+            text-align: center;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            min-height: 100vh;
+            box-sizing: border-box;
+        }
+
+        h1 {
+            margin: 10px 0 5px 0;
+            font-size: 2.2rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        p.subtitle {
+            margin: 0 0 20px 0;
+            font-size: 1.1rem;
+            color: #dfe6e9;
+            font-weight: 500;
+        }
+
+        /* --- BINGO BOARD STYLES --- */
+        #bingo-board {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 6px;
+            width: 100%;
+            max-width: 500px;
+            background: var(--board-bg);
+            padding: 10px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+
+        .bingo-cell {
+            background-color: var(--cell-bg);
+            color: var(--cell-text);
+            aspect-ratio: 1 / 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 4px;
+            font-size: 0.75rem;
+            font-weight: 700;
+            border-radius: 8px;
+            cursor: pointer;
+            box-sizing: border-box;
+            word-wrap: break-word;
+            line-height: 1.2;
+            box-shadow: 0 4px 0 var(--shadow-color);
+            transition: transform 0.1s, box-shadow 0.1s, background-color 0.2s;
+        }
+
+        .bingo-cell:active {
+            transform: translateY(4px);
+            box-shadow: 0 0px 0 var(--shadow-color);
+        }
+
+        .bingo-cell.stamped {
+            background-color: var(--stamped-bg);
+            color: var(--stamped-text);
+            box-shadow: 0 4px 0 var(--stamped-shadow);
+            background-image: radial-gradient(circle, rgba(255,255,255,0.1) 10%, transparent 10.01%);
+            background-size: 20px 20px;
+        }
+        
+        .bingo-cell.stamped:active {
+            transform: translateY(4px);
+            box-shadow: 0 0px 0 var(--stamped-shadow);
+        }
+
+        #message-container {
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: 15px;
+        }
+
+        #message {
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: #fdcb6e;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.4);
+            opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        #message.show {
+            opacity: 1;
+            transform: scale(1);
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        button.shuffle-btn {
+            margin-top: 5px;
+            padding: 15px 30px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            background-color: #ff7675;
+            color: white;
+            border: none;
+            border-radius: 30px;
+            box-shadow: 0 4px 0 #d63031;
+            cursor: pointer;
+            transition: all 0.1s;
+            margin-bottom: 30px;
+        }
+
+        button.shuffle-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0px 0 #d63031;
+        }
+
+        /* --- TRIVIA SECTION STYLES --- */
+        #trivia-section {
+            width: 100%;
+            max-width: 500px;
+            background: var(--board-bg);
+            padding: 20px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-sizing: border-box;
+            text-align: left;
+        }
+
+        #trivia-section h2 {
+            text-align: center;
+            margin-top: 0;
+            margin-bottom: 20px;
+            font-size: 1.5rem;
+            color: #fdcb6e;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+        }
+
+        .trivia-item {
+            margin-bottom: 12px;
+        }
+
+        .trivia-q {
+            background-color: var(--trivia-q-bg);
+            color: white;
+            padding: 12px 15px;
+            font-size: 0.95rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 4px 0 var(--trivia-q-shadow);
+            transition: transform 0.1s, box-shadow 0.1s;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .trivia-q:active {
+            transform: translateY(4px);
+            box-shadow: 0 0px 0 var(--trivia-q-shadow);
+        }
+
+        .trivia-q::after {
+            content: '▼';
+            font-size: 0.8rem;
+            transition: transform 0.3s;
+            margin-left: 10px;
+        }
+
+        .trivia-item.active .trivia-q::after {
+            transform: rotate(180deg);
+        }
+
+        .trivia-a {
+            background-color: rgba(0, 0, 0, 0.25);
+            color: #dfe6e9;
+            padding: 0 15px;
+            font-size: 0.95rem;
+            line-height: 1.5;
+            border-radius: 0 0 8px 8px;
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out, padding 0.3s ease;
+            font-style: italic;
+        }
+
+        .trivia-item.active .trivia-a {
+            max-height: 300px; /* Enough space for long answers */
+            padding: 12px 15px;
+        }
+
+        @media (max-width: 450px) {
+            .bingo-cell { font-size: 0.65rem; }
+            h1 { font-size: 1.8rem; }
+            .trivia-q { font-size: 0.85rem; }
+            .trivia-a { font-size: 0.85rem; }
+        }
+        @media (max-width: 360px) {
+            .bingo-cell { font-size: 0.55rem; }
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Road Trip Bingo</h1>
+    <p class="subtitle">Pleasanton ➔ Pacific Pipes</p>
+
+    <div id="bingo-board"></div>
+
+    <div id="message-container">
+        <div id="message">🎉 BINGO! SEND IT! 🎉</div>
+    </div>
+    
+    <button class="shuffle-btn" onclick="generateBoard()">Shuffle Board</button>
+
+    <div id="trivia-section">
+        <h2>🚗 Road Trip Trivia 🧗‍♂️</h2>
+        <div id="trivia-container"></div>
+    </div>
+
+    <script>
+        // --- BINGO LOGIC ---
+        const bingoItems = [
+            "BART Train passing by",
+            "Traffic jam on 580/880",
+            "Port of Oakland Cranes",
+            "Coliseum / Arena",
+            "Motorcycle lane splitting",
+            "Tesla with vanity plate",
+            "Mattress on highway shoulder",
+            "Climbing beanie in a car",
+            "Touchstone bumper sticker",
+            "Pacific Pipes Building!",
+            "Plane flying into OAK",
+            "Out-of-state license plate",
+            "Graffiti mural",
+            "Dog hanging out window",
+            "Pothole (Avoid it!)",
+            "Classic lowrider / muscle car",
+            "In-N-Out Burger sign",
+            "Someone drinking boba",
+            "FasTrak Toll Plaza",
+            "Crash pad in a car",
+            "Prius going 10mph under",
+            "Food truck near the gym",
+            "MacArthur Maze sign",
+            "Someone singing in their car",
+            "Subaru with a roof box",
+            "Nalgene or Hydroflask",
+            "Lake Merritt runners",
+            "Overly aggressive Audi/BMW",
+            "Flock of wild turkeys",
+            "Patagonia puffy jacket"
+        ];
+
+        let cells = [];
+
+        function shuffle(array) {
+            let currentIndex = array.length, randomIndex;
+            while (currentIndex != 0) {
+                randomIndex = Math.floor(Math.random() * currentIndex);
+                currentIndex--;
+                [array[currentIndex], array[randomIndex]] = [array[randomIndex], array[currentIndex]];
+            }
+            return array;
+        }
+
+        function generateBoard() {
+            const board = document.getElementById("bingo-board");
+            document.getElementById("message").classList.remove("show");
+            board.innerHTML = "";
+            cells = [];
+
+            const shuffledItems = shuffle([...bingoItems]);
+
+            for (let i = 0; i < 25; i++) {
+                const cell = document.createElement("div");
+                cell.classList.add("bingo-cell");
+                cell.innerText = shuffledItems[i];
+                
+                cell.addEventListener("click", function() {
+                    this.classList.toggle("stamped");
+                    checkForBingo();
+                });
+                
+                board.appendChild(cell);
+                cells.push(cell);
+            }
+        }
+
+        function checkForBingo() {
+            const winningCombos = [
+                [0, 1, 2, 3, 4], [5, 6, 7, 8, 9], [10, 11, 12, 13, 14], [15, 16, 17, 18, 19], [20, 21, 22, 23, 24],
+                [0, 5, 10, 15, 20], [1, 6, 11, 16, 21], [2, 7, 12, 17, 22], [3, 8, 13, 18, 23], [4, 9, 14, 19, 24],
+                [0, 6, 12, 18, 24], [4, 8, 12, 16, 20]
+            ];
+
+            let hasBingo = winningCombos.some(combo => 
+                combo.every(index => cells[index].classList.contains("stamped"))
+            );
+
+            const msgElement = document.getElementById("message");
+            if (hasBingo) msgElement.classList.add("show");
+            else msgElement.classList.remove("show");
+        }
+
+        // --- TRIVIA LOGIC (42 Questions) ---
+        const triviaData = [
+            // Oakland & Bay Area History
+            { q: "Are the Port of Oakland cranes the AT-ATs from Star Wars?", a: "Nope! Despite the legendary Bay Area rumor that George Lucas was inspired by them while stuck in traffic, he officially denied it. But let's be honest... they totally look like them." },
+            { q: "What did the Pacific Pipes building make before it became a gym?", a: "You guessed it: pipes! Built in the 1920s, it was a manufacturing facility for steel pipes and metal casings. Now, it just produces pumped forearms." },
+            { q: "Lake Merritt isn't actually a lake. What is it?", a: "It's a tidal slough! It connects directly to the San Francisco Bay, which means it's salty, it has a tide, and yes—there are sometimes leopard sharks in it." },
+            { q: "What delicious summer treat was invented in Oakland?", a: "The Popsicle! In 1905, an 11-year-old named Frank Epperson left a cup of powdered soda, water, and a stirring stick on his porch overnight. It froze, and history was made." },
+            { q: "What famous cocktail was invented at Trader Vic's in Oakland?", a: "The Mai Tai! Invented in 1944. The name comes from the Tahitian word 'Maita'i', meaning 'Good' or 'Excellence'." },
+            { q: "What classic ice cream flavor was invented in Oakland?", a: "Rocky Road! It was created in 1929 by William Dreyer (of Dreyer's Ice Cream) to give people something sweet to smile about during the Great Depression." },
+            { q: "What Oakland theme park inspired Walt Disney?", a: "Children's Fairyland! Walt Disney visited in the early 1950s and hired their executive director as his first general manager for Disneyland." },
+            { q: "Where did Bruce Lee open his second martial arts studio?", a: "Oakland! He opened the Jun Fan Gung Fu Institute here with his friend James Lee, and it's where his legendary (and highly secretive) fight with Wong Jack Man took place." },
+            { q: "What is the official state bird of Interstate 880?", a: "The rogue mattress, usually found strapped to the roof of a 2004 Honda Civic with a single piece of twine." },
+            { q: "Who hides on the Bay Bridge?", a: "The Bay Bridge Troll! After the 1989 earthquake, ironworkers secretly welded a little metal troll to the bridge for protection. When they built the new eastern span, they brought him over!" },
+            { q: "What is Oakland's original name?", a: "During the Spanish colonial era, the area was called 'Encinal' (oak grove) and later part of 'Contra Costa' before officially becoming Oakland in 1852." },
+            { q: "Why is I-580 so incredibly windy through Castro Valley?", a: "It was built over the original stagecoach and wagon trails, which naturally followed the curves of the hills and fault lines to avoid steep climbs." },
+            { q: "What happens if you run the FasTrak toll without a tag?", a: "You get a lovely, aggressively-worded envelope in the mail containing a high-definition photograph of your license plate. Say cheese!" },
+            { q: "Why are there so many Teslas in the East Bay?", a: "The massive Tesla Factory is located right off I-880 in Fremont. It used to be the NUMMI plant (a joint venture between GM and Toyota)." },
+            { q: "What is a 'sideshow'?", a: "An unofficial, illegal, and highly dangerous car exhibition involving drifting and doing 'donuts' in an intersection. It originated in East Oakland in the 1980s." },
+            { q: "Where does the word 'hella' come from?", a: "Right here! 'Hella' originated in the East Bay (specifically Oakland and Hayward) in the late 70s/early 80s." },
+            { q: "What Wild West nickname did Pleasanton use to have?", a: "It was known as 'The Most Desperate Town in the West.' It was a popular hideout for bandits, including the legendary Joaquin Murrieta." },
+            { q: "What is the 'MacArthur Maze' actually called?", a: "Officially, Caltrans calls it the 'Distribution Structure.' But since that sounds like a boring warehouse, everyone calls it The Maze." },
+            { q: "Who is the Nimitz Freeway (I-880) named after?", a: "Fleet Admiral Chester W. Nimitz, the Commander of the US Pacific Fleet during World War II. He lived in Berkeley!" },
+            { q: "Why is the Grand Lake Theater famous beyond its movies?", a: "The owner famously uses the theater's massive outdoor marquee to post spicy, highly opinionated political messages for the whole neighborhood to read." },
+            { q: "How fast can a BART train actually go?", a: "They have a top speed of 80 mph! Though when they go through the Transbay Tube, they sound like a screeching banshee at any speed." },
+            { q: "Why does the Caldecott Tunnel have an odd number of bores (tunnels)?", a: "It used to have 3! They used to manually switch the direction of the middle tunnel twice a day depending on commuter traffic. They finally built a 4th tunnel in 2013." },
+            
+            // Climbing Trivia
+            { q: "Why is route information called 'Beta'?", a: "In the 1980s, the late legendary climber Jack Mileski used to record climbers on Betamax tapes to share their route strategies with others. 'I've got the Betamax!' became 'I've got the beta!'" },
+            { q: "Why do gym climbers wear beanies when it's 75 degrees inside?", a: "Science proves that wearing a beanie gives you +10 core strength and automatically increases your climbing grade. (Actually, it's just pure gym fashion)." },
+            { q: "What does it mean to 'Send' a route?", a: "It’s short for 'Ascend.' If you cleanly ascend a route without falling or resting on the rope, you have officially Sent it." },
+            { q: "What exactly is climbing chalk?", a: "It’s Magnesium Carbonate! It doesn't actually make your hands sticky; it just absorbs sweat so you don't slip off the plastic holds." },
+            { q: "What is a 'Flapper'?", a: "A painful climbing rite of passage. It's when a thick callus on your finger tears off and hangs by a flap of skin. Tape it up and keep going!" },
+            { q: "What is a 'Gaston'?", a: "A climbing move where you push a hold outward (like opening an elevator door). It’s named after French alpinist Gaston Rébuffat." },
+            { q: "What is a 'Dyno'?", a: "Short for 'dynamic movement.' It's when you completely let go of the wall and jump through the air to catch the next hold." },
+            { q: "What is a 'Gumby'?", a: "An affectionate (or sometimes mocking) term for a clueless beginner climber. Often spotted wearing their climbing harness while bouldering." },
+            { q: "What does 'Belay' actually mean?", a: "It's an old sailing term! It originally meant to secure a rope to a cleat or pin on a ship. Climbers stole it." },
+            { q: "What is a 'French Start'?", a: "Cheating! It's when a climber jumps off the ground to grab the first hold, rather than establishing their weight on the wall first." },
+            { q: "What is 'Smearing'?", a: "When there are no footholds, so you just mash the rubber of your shoe against a flat section of wall and pray to the physics gods that friction holds you up." },
+            { q: "Why do aggressive climbing shoes look so uncomfortable?", a: "They are aggressively downturned (like a banana) so climbers can use their toes like hooks to grab holds on steep, overhanging walls. Yes, they hurt." },
+            { q: "What does the phrase 'Pink one in the corner' mean?", a: "It's a universal climbing meme. No matter what gym you go to, there is always an incredibly hard pink route in the corner that ruins your ego." },
+            { q: "What is the 'Crux'?", a: "The absolute hardest, most miserable, 'I'm about to fall' section of a climbing route." },
+            { q: "What do you yell when you're completely exhausted on a rope?", a: "'TAKE!' It means 'Pull the rope tight because I am letting go of this wall immediately!'" },
+            { q: "Why is it called 'Bouldering'?", a: "Because originally, climbers would practice moves on small boulders near the ground without ropes before attempting massive mountains. Now, it's just a lifestyle." },
+            { q: "What is a 'High-ball'?", a: "A boulder problem that is just a little too tall. If you fall from the top, your crash pad starts looking like a postage stamp." },
+            { q: "When did Touchstone Climbing open its first gym?", a: "1995! They opened Mission Cliffs in San Francisco. Pacific Pipes is just one of their many massive expansions since then." },
+            { q: "What is a 'Crash Pad'?", a: "A thick foam mattress that boulderers carry on their backs like ninja turtles so they don't break their ankles when falling outside." },
+            { q: "What is 'Pump'?", a: "When lactic acid fills your forearms so completely that they feel like they are made of lead, and you physically cannot close your fingers anymore." }
+        ];
+
+        function renderTrivia() {
+            const container = document.getElementById('trivia-container');
+            
+            triviaData.forEach(item => {
+                const triviaItem = document.createElement('div');
+                triviaItem.className = 'trivia-item';
+                
+                const questionDiv = document.createElement('div');
+                questionDiv.className = 'trivia-q';
+                questionDiv.innerText = item.q;
+                
+                const answerDiv = document.createElement('div');
+                answerDiv.className = 'trivia-a';
+                answerDiv.innerText = item.a;
+                
+                // Toggle functionality
+                questionDiv.addEventListener('click', () => {
+                    triviaItem.classList.toggle('active');
+                });
+                
+                triviaItem.appendChild(questionDiv);
+                triviaItem.appendChild(answerDiv);
+                container.appendChild(triviaItem);
+            });
+        }
+
+        // Initialize everything
+        generateBoard();
+        renderTrivia();
+    </script>
+</body>
+</html>
