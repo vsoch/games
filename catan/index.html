@@ -1,0 +1,1788 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>JS Catan Clone</title>
+    <style>
+        :root {
+            --bg-color: #1e1e24;
+            --panel-bg: #2a2a35;
+            --text-color: #f5f5f5;
+            --accent-color: #ff9f43;
+            --wood-color: #2e7d32;
+            --brick-color: #d84315;
+            --wheat-color: #fbc02d;
+            --sheep-color: #7cb342;
+            --ore-color: #78909c;
+            --desert-color: #d7ccc8;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { background-color: var(--bg-color); color: var(--text-color); display: flex; height: 100vh; overflow: hidden; }
+
+        /* Overlays & Modals */
+        #setup-screen, #modal-overlay, #advanced-trade-modal, #discard-modal {
+            position: absolute; width: 100%; height: 100%; background: rgba(30,30,36,0.95);
+            display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 100;
+        }
+        #modal-overlay, #advanced-trade-modal, #discard-modal { z-index: 2000; display: none; }
+        
+        .setup-box {
+            background: var(--panel-bg); padding: 30px; border-radius: 12px; box-shadow: 0 8px 32px rgba(0,0,0,0.8);
+            text-align: center; max-width: 420px; width: 100%;
+            max-height: 95vh; overflow-y: auto;
+        }
+        .large-box { max-width: 550px !important; }
+        
+        h1 { color: var(--accent-color); margin-bottom: 24px; font-size: 2.5rem; }
+        h2 { color: #fff; margin-bottom: 15px; font-size: 1.5rem; }
+        h3 { font-size: 1.1rem; margin-bottom: 12px; }
+        
+        .setup-group { margin-bottom: 20px; text-align: left; }
+        label { display: block; margin-bottom: 8px; font-weight: bold; color: #ccc; }
+        select { width: 100%; padding: 10px; border-radius: 6px; background: #3e3e4f; color: #fff; border: 1px solid #555; font-size: 1rem; margin-bottom: 10px;}
+        
+        button {
+            width: 100%; padding: 12px; border: none; border-radius: 6px; background: var(--accent-color);
+            color: #fff; font-size: 1.1rem; font-weight: bold; cursor: pointer; transition: background 0.2s; margin-top: 10px;
+        }
+        button:hover:not(:disabled) { background: #ffaa54; }
+        button:disabled { background: #555 !important; cursor: not-allowed; opacity: 0.4; }
+        .btn-secondary { background: #556; }
+        .btn-secondary:hover:not(:disabled) { background: #667; }
+
+        /* Main Layout Frame */
+        #game-container { display: flex; width: 100%; height: 100%; }
+        .side-panel { background: var(--panel-bg); display: flex; flex-direction: column; z-index: 10; overflow-y: auto; overflow-x: hidden; }
+        
+        /* Left Sidebar - Removed nested overflow to prevent scrolling traps */
+        #sidebar { width: 460px; border-right: 2px solid #3a3a4a; order: 1; position: relative; }
+        
+        /* Central Map Container */
+        #canvas-container { flex: 1; display: flex; flex-direction: column; position: relative; background: #141419; order: 2; padding: 0; }
+        
+        /* Right Sidebar */
+        #right-panel { width: 360px; border-left: 2px solid #3a3a4a; order: 3; }
+
+        /* Fixed Map Bounds Handling */
+        canvas { 
+            width: 100%;
+            max-width: 600px;
+            height: 100%;
+            max-height: 520px;
+            object-fit: contain; /* Proportional scaling without clipping */
+            margin: auto; /* Centers the map in leftover space */
+            cursor: default; 
+            background-color: #102a43;
+            border-radius: 8px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            touch-action: none; /* Prevents touchscreen panning */
+        }
+
+        .panel-section { padding: 15px; border-bottom: 1px solid #3a3a4a; }
+        
+        /* Action Required Cues & Keyframes */
+        @keyframes pulse-action-banner {
+            0% { background: #343444; color: var(--accent-color); }
+            50% { background: #ff9f43; color: #1e1e24; }
+            100% { background: #343444; color: var(--accent-color); }
+        }
+        
+        /* Status Banner Native to the Map Panel */
+        #status-banner { width: 100%; background: #343444; padding: 12px; font-weight: bold; text-align: center; font-size: 1.1rem; color: var(--accent-color); transition: background 0.3s; z-index: 100; flex-shrink: 0; box-shadow: 0 4px 10px rgba(0,0,0,0.3); }
+        #status-banner.action-required { animation: pulse-action-banner 2.2s infinite ease-in-out; box-shadow: inset 0 0 12px rgba(255, 159, 67, 0.4); }
+
+        /* Players Info */
+        .player-row { padding: 12px; margin-bottom: 8px; border-radius: 6px; background: #323242; border-left: 6px solid transparent; }
+        .player-row:last-child { margin-bottom: 0; }
+        .player-row.active { border-left-color: var(--accent-color); background: #3d3d52; }
+        .player-header { display: flex; justify-content: space-between; font-weight: bold; margin-bottom: 5px; }
+        .player-name { font-size: 1.1rem; }
+        .player-score { font-size: 1.1rem; }
+        .ai-stats { font-size: 0.95rem; color: #bbb; padding: 6px 0; display: flex; gap: 15px; }
+        .achievements { font-size: 0.8rem; color: #ffd700; margin-top: 4px; font-weight: bold; }
+        
+        /* Resource Cards Grid */
+        .resource-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; font-size: 0.85rem; text-align: center; }
+        .res-badge { padding: 4px; border-radius: 4px; font-weight: bold; color: #111; text-shadow: 0px 0px 2px rgba(255,255,255,0.5); }
+        .human-cards { gap: 8px; font-size: 1.25rem; margin-top: 8px; }
+        .human-cards .res-badge { padding: 12px 4px; border: 1px solid rgba(255,255,255,0.2); box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        
+        /* Development Pool Tracker Layouts */
+        .dev-card-tracker { margin-top: 10px; display: flex; flex-direction: column; gap: 6px; background: #22222c; padding: 8px; border-radius: 4px; box-shadow: inset 0 2px 4px rgba(0,0,0,0.5); }
+        .dev-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; color: #eee; }
+        .play-btn { width: auto; padding: 4px 10px; font-size: 0.8rem; margin: 0; background: #4caf50; }
+
+        /* Actions Matrix & Trade Interfaces */
+        .action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .action-btn { padding: 10px; font-size: 0.9rem; margin: 0; }
+        .trade-container { display: flex; flex-direction: column; gap: 10px; }
+        .trade-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem; flex-wrap: wrap; gap: 5px; }
+        .trade-selectors { display: flex; gap: 5px; align-items: center; }
+        .trade-selectors select { padding: 5px; font-size: 0.85rem; background: #3e3e4f; color: #fff; border: 1px solid #555; border-radius: 4px; margin: 0; }
+        .sub-header { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: #889; font-weight: bold; }
+
+        /* Trade UI Modular Sizing Matrix */
+        .trade-grid { display: flex; gap: 15px; text-align: left; }
+        .trade-col { flex: 1; background: #22222c; padding: 15px; border-radius: 8px; }
+        .inc-btn { width: 30px; padding: 4px; margin: 0; font-size: 1.1rem; background: #445; flex-shrink: 0; }
+        #adv-trade-status { min-height: 24px; font-weight: bold; font-size: 1.05rem; margin-bottom: 15px; }
+        
+        .trade-item-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; width: 100%; }
+        .trade-item-controls { display: flex; align-items: center; gap: 5px; flex-wrap: nowrap; } /* Forces buttons to never vertically stack */
+        .trade-label { font-size: 1.1rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .trade-val { display: inline-block; width: 24px; text-align: center; font-size: 1.1rem; font-weight: bold; }
+
+        /* Dice Face CSS Dots Vector Maps */
+        #dice-section { padding: 20px; border-bottom: 1px solid #3a3a4a; display: flex; flex-direction: column; align-items: center; background: #2a2a35; position: sticky; top: 0; z-index: 50; }
+        #dice-container { display: flex; gap: 24px; margin-top: 12px; }
+        .die {
+            width: 65px; height: 65px; background: #f5f5f5; border-radius: 12px;
+            display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(3, 1fr);
+            padding: 7px; gap: 4px; box-shadow: inset 0 -5px 0 rgba(0,0,0,0.15), 0 5px 10px rgba(0,0,0,0.4);
+        }
+        .dot { background: #1e1e24; border-radius: 50%; width: 9px; height: 9px; margin: auto; visibility: hidden; }
+        .dot.active { visibility: visible; }
+
+        /* Separated Turn Feed Log UI Blocks */
+        #log-container { flex: 1; overflow-y: auto; padding: 15px; font-size: 0.85rem; line-height: 1.4; display: flex; flex-direction: column-reverse; background: #1a1a22; min-height: 0; }
+        .turn-block { border: 1px solid #2d2d3a; background: #22222c; border-radius: 6px; padding: 10px; margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; box-shadow: 0 2px 6px rgba(0,0,0,0.2); }
+        .turn-block-header { font-weight: bold; color: var(--accent-color); border-bottom: 1px solid #3d3d52; padding-bottom: 4px; margin-bottom: 4px; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        .log-entry { color: #ccc; line-height: 1.35; }
+        .log-entry.important { color: var(--accent-color); font-weight: bold; }
+        .log-entry.success { color: #81c784; }
+        .log-entry.robber { color: #e57373; font-style: italic; }
+
+        /* ========================================================
+           Mobile Responsiveness Matrix - Vertical Stacking 
+           ======================================================== */
+        @media (max-width: 950px) and (orientation: portrait) {
+            body { height: auto; overflow-y: auto; overflow-x: hidden; }
+            #game-container { flex-direction: column; display: flex; }
+            
+            /* Break the flex column wrappers so we can order elements globally */
+            #sidebar, #right-panel { display: contents; }
+            
+            /* Restore backgrounds lost by display:contents */
+            .panel-section, #dice-section, #log-container { 
+                background: var(--panel-bg); 
+                border-bottom: 2px solid #3a3a4a; 
+                width: 100%; 
+            }
+
+            /* Highly requested re-ordering */
+            #canvas-container { order: 1; padding: 0 5px 5px 5px; background: #0b1a2a; border-bottom: 3px solid var(--accent-color); height: 50vh; min-height: 350px; }
+            #human-player-panel { order: 2; }
+            #actions-panel { order: 3; }
+            #trade-panel { order: 4; }
+            #other-players-panel { order: 5; }
+            #dice-section { order: 6; position: static; }
+            #log-container { order: 7; overflow-y: visible; height: auto; flex: none; min-height: 300px; padding-bottom: 40px; }
+
+            .action-grid { grid-template-columns: repeat(3, 1fr); }
+            .human-cards { font-size: 1.1rem; }
+            .trade-grid { flex-direction: column; }
+        }
+
+        /* ========================================================
+           Landscape Media Queries - Forced Desktop-style Columns 
+           ======================================================== */
+        @media (max-height: 600px) and (orientation: landscape), (max-width: 950px) and (orientation: landscape) {
+            html { font-size: 14px; }
+            #sidebar { width: 35%; min-width: 280px; }
+            #right-panel { width: 30%; min-width: 260px; display: flex; flex-direction: column; }
+            #canvas-container { padding: 0 5px 5px 5px; }
+            
+            /* Shrink dice gracefully */
+            #dice-section { padding: 10px; }
+            #dice-container { gap: 15px; margin-top: 5px; }
+            .die { width: 40px; height: 40px; padding: 4px; border-radius: 8px; }
+            .dot { width: 6px; height: 6px; }
+            
+            /* Shrink AI player rows */
+            .player-name, .player-score { font-size: 1rem; }
+            .human-cards .res-badge { padding: 4px 2px; font-size: 0.9rem; }
+            .action-grid { gap: 5px; }
+            .action-btn { padding: 6px; font-size: 0.85rem; }
+            #open-trade-btn { padding: 6px !important; }
+            
+            /* Ensure nested scrolling functions in squished heights */
+            #log-container { padding: 5px; font-size: 0.75rem; flex: 1; }
+            .turn-block { padding: 4px; margin-bottom: 4px; gap: 2px; }
+            
+            .setup-box { padding: 10px; margin: auto; }
+            h1 { font-size: 1.5rem; margin-bottom: 10px; }
+            
+            /* Compact Trade/Discard Modals for Landscape */
+            .setup-box h2 { margin-bottom: 8px; font-size: 1.2rem; }
+            .setup-group { margin-bottom: 10px; }
+            .trade-grid { gap: 5px; margin-bottom: 5px !important; }
+            .trade-col { padding: 5px 10px; }
+            .trade-col h3 { margin-bottom: 2px; font-size: 0.9rem; }
+            .trade-item-row { margin-bottom: 2px !important; }
+            .trade-label, .trade-val { font-size: 0.85rem !important; }
+            .trade-item-controls { gap: 2px; }
+            .inc-btn { padding: 0px; font-size: 0.9rem; width: 22px; height: 22px; }
+            #adv-trade-status { margin-bottom: 5px !important; min-height: 18px; font-size: 0.9rem; }
+            .setup-box button { padding: 6px; font-size: 0.95rem; margin-top: 5px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="setup-screen">
+        <div class="setup-box">
+            <h1>CATAN</h1>
+            <div class="setup-group">
+                <label for="player-count">Total Players</label>
+                <select id="player-count">
+                    <option value="3">3 Players (You + 2 AIs)</option>
+                    <option value="4" selected>4 Players (You + 3 AIs)</option>
+                </select>
+            </div>
+            <div class="setup-group">
+                <label for="vp-goal">Victory Points Target</label>
+                <select id="vp-goal">
+                    <option value="10" selected>10 Points (Standard)</option>
+                    <option value="13">13 Points (Expanded)</option>
+                </select>
+            </div>
+            <button type="button" id="start-btn" onclick="startGame()">Start Game</button>
+        </div>
+    </div>
+
+    <div id="modal-overlay">
+        <div id="modal-content" class="setup-box">
+            <h2 id="modal-title">Notice</h2>
+            <div id="modal-body" style="margin-bottom: 20px; color: #ddd;"></div>
+            <div id="modal-actions" style="display: flex; gap: 10px; flex-wrap: wrap; justify-content: center;"></div>
+        </div>
+    </div>
+
+    <div id="discard-modal">
+        <div class="setup-box large-box">
+            <h2>Robber Strikes!</h2>
+            <p style="color: #e57373; margin-bottom: 15px;">You have too many cards! Select <strong id="discard-target-amt">0</strong> to discard.</p>
+            <div class="trade-grid" style="margin-bottom: 15px; justify-content: center;">
+                <div class="trade-col" id="discard-list" style="max-width: 300px;"></div>
+            </div>
+            <p style="margin-bottom: 10px;">Selected: <strong id="discard-current-amt">0</strong> / <span id="discard-req-amt">0</span></p>
+            <button type="button" id="submit-discard-btn" onclick="submitHumanDiscard()" disabled>Confirm Discard</button>
+        </div>
+    </div>
+
+    <div id="advanced-trade-modal">
+        <div class="setup-box large-box">
+            <h2>Propose Trade</h2>
+            <div id="adv-trade-status"></div>
+            <div class="trade-grid" style="margin-bottom: 15px;">
+                <div class="trade-col">
+                    <h3 style="color:#ff9f43;">You Offer</h3>
+                    <div id="trade-offer-list"></div>
+                </div>
+                <div class="trade-col">
+                    <h3 style="color:#4caf50;">You Want</h3>
+                    <div id="trade-want-list"></div>
+                </div>
+            </div>
+            <div style="margin-bottom: 15px; text-align:left;">
+                <label>Target Player:</label>
+                <select id="adv-trade-target"></select>
+            </div>
+            <div style="display:flex; gap: 10px;">
+                <button type="button" id="submit-adv-trade-btn" onclick="handleAdvancedTradeProposal()">Propose</button>
+                <button type="button" class="btn-secondary" onclick="closeTradeModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="game-container">
+        <div id="sidebar" class="side-panel">
+            <!-- Separated the Human player visually from the other AI info -->
+            <div id="human-player-panel" class="panel-section" style="padding-bottom: 5px;"></div>
+
+            <div id="actions-panel" class="panel-section" style="padding-bottom: 5px;">
+                <div class="action-grid">
+                    <button type="button" id="roll-btn" class="action-btn" onclick="handleRoll()" disabled>Roll Dice</button>
+                    <button type="button" id="end-turn-btn" class="action-btn" onclick="handleEndTurn()" disabled>End Turn</button>
+                    <button type="button" id="build-road-btn" class="action-btn" onclick="setBuildMode('road')" disabled>Road (🪵🧱)</button>
+                    <button type="button" id="build-settlement-btn" class="action-btn" onclick="setBuildMode('settlement')" disabled>Town (🪵🧱🌾🐑)</button>
+                    <button type="button" id="build-city-btn" class="action-btn" onclick="setBuildMode('city')" disabled>City (🌾🌾🪨🪨🪨)</button>
+                    <button type="button" id="dev-card-btn" class="action-btn" onclick="buyDevCard()" disabled>Dev Card (🌾🐑🪨)</button>
+                </div>
+            </div>
+
+            <div id="trade-panel" class="panel-section">
+                <div class="trade-container">
+                    <div class="sub-header">Player Trade 🤝</div>
+                    <button type="button" id="open-trade-btn" style="padding: 10px; margin: 0; font-size: 0.95rem;" onclick="openTradeModal()" disabled>Open Trade Menu</button>
+                    
+                    <hr style="border: 0; border-top: 1px solid #445; margin: 5px 0;">
+                    <div class="sub-header">Maritime Trade ⚓</div>
+                    <div class="trade-row">
+                        <div class="trade-selectors">Give: <select id="trade-give" style="width: 75px;" onchange="updateBankTradeUI()"></select> ➡️ Get: <select id="trade-get" style="width: 75px;" onchange="updateBankTradeUI()"></select></div>
+                        <button type="button" id="trade-btn" style="padding: 6px 12px; font-size: 0.85rem; width: auto;" onclick="handleBankTrade()" disabled>Execute (4:1)</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- AI Player Stats Drop Below Trade on Mobile -->
+            <div id="other-players-panel" class="panel-section"></div>
+        </div>
+
+        <div id="canvas-container">
+            <div id="status-banner">Setting up game...</div>
+            <canvas id="boardCanvas" width="600" height="520"></canvas>
+        </div>
+
+        <div id="right-panel" class="side-panel">
+            <div id="dice-section">
+                <div style="font-weight:bold; color:var(--accent-color); letter-spacing: 1px; text-transform: uppercase;">Latest Roll</div>
+                <div id="dice-container">
+                    <div class="die" id="die1"></div>
+                    <div class="die" id="die2"></div>
+                </div>
+            </div>
+            <div id="log-container"></div>
+        </div>
+    </div>
+
+    <script>
+        const delay = ms => new Promise(res => setTimeout(res, ms));
+
+        function showModal(title, bodyHtml, buttons = []) {
+            return new Promise(resolve => {
+                document.getElementById('modal-title').innerText = title;
+                document.getElementById('modal-body').innerHTML = bodyHtml;
+                
+                const actionsDiv = document.getElementById('modal-actions');
+                actionsDiv.innerHTML = '';
+                
+                buttons.forEach(btn => {
+                    const el = document.createElement('button');
+                    el.type = 'button';
+                    el.className = btn.secondary ? 'btn-secondary' : '';
+                    el.style.width = 'auto';
+                    el.style.padding = '8px 16px';
+                    el.innerText = btn.text;
+                    
+                    el.onclick = () => {
+                        document.getElementById('modal-overlay').style.display = 'none';
+                        if (btn.getVal) resolve(btn.getVal());
+                        else resolve(btn.value);
+                    };
+                    actionsDiv.appendChild(el);
+                });
+                
+                document.getElementById('modal-overlay').style.display = 'flex';
+            });
+        }
+
+        // --- DATA STRUCTURES ---
+        const RESOURCE_TYPES = {
+            DESERT: { name: 'Desert', color: '#d7ccc8', short: '🏜️' },
+            WOOD: { name: 'Wood', color: '#2e7d32', short: '🪵' },
+            BRICK: { name: 'Brick', color: '#d84315', short: '🧱' },
+            WHEAT: { name: 'Wheat', color: '#fbc02d', short: '🌾' },
+            SHEEP: { name: 'Sheep', color: '#7cb342', short: '🐑' },
+            ORE: { name: 'Ore', color: '#78909c', short: '🪨' }
+        };
+
+        const DEV_TYPES = {
+            KNIGHT: { name: 'Knight ⚔️', type: 'KNIGHT' },
+            VP: { name: 'Victory Point 📜', type: 'VP' },
+            MONOPOLY: { name: 'Monopoly 👑', type: 'MONOPOLY' },
+            ROAD_BUILDING: { name: 'Road Building 🛤️', type: 'ROAD_BUILDING' },
+            YEAR_OF_PLENTY: { name: 'Year of Plenty 🎁', type: 'YEAR_OF_PLENTY' }
+        };
+
+        const PLAYER_CONFIGS = [
+            { id: 0, name: 'You (Blue)', color: '#29b6f6', isAI: false },
+            { id: 1, name: 'AI Red', color: '#ef5350', isAI: true },
+            { id: 2, name: 'AI Orange', color: '#ffa726', isAI: true },
+            { id: 3, name: 'AI Green', color: '#66bb6a', isAI: true }
+        ];
+
+        const MAP_ROW_LAYOUT = [ { r: -2, qStart: 0, count: 3 }, { r: -1, qStart: -1, count: 4 }, { r: 0, qStart: -2, count: 5 }, { r: 1, qStart: -2, count: 4 }, { r: 2, qStart: -2, count: 3 } ];
+        const BASE_RESOURCES = [ 'DESERT', 'WOOD', 'WOOD', 'WOOD', 'WOOD', 'BRICK', 'BRICK', 'BRICK', 'WHEAT', 'WHEAT', 'WHEAT', 'WHEAT', 'SHEEP', 'SHEEP', 'SHEEP', 'SHEEP', 'ORE', 'ORE', 'ORE' ];
+        const BASE_TOKENS = [2, 3, 3, 4, 4, 5, 5, 6, 6, 8, 8, 9, 9, 10, 10, 11, 11, 12];
+
+        // --- STATE ---
+        let G = {
+            players: [], turnOrder: [], hexes: [], vertices: [], edges: [], devDeck: [],
+            robberHexIndex: 0, activePlayerIdx: 0, turnIndex: 0, vpGoal: 10,
+            phase: 'INIT_ROLL', postRobberPhase: 'MAIN', setupStep: 0, setupDirection: 1, dice: [1, 1], buildMode: null,
+            interactionRadius: 20, devCardPlayedThisTurn: false, freeRoads: 0,
+            largestArmyPlayer: null, longestRoadPlayer: null, currentTurnBlock: null, lastSetupVert: null,
+            lastAction: '' // Tracks exact micro-moves for the real-time banner
+        };
+
+        const canvas = document.getElementById('boardCanvas');
+        const ctx = canvas.getContext('2d');
+        const hexRadius = 48; // Mathematically bounds perfectly within 600x520
+        const centerX = canvas.width / 2;
+        const centerY = canvas.height / 2;
+
+        let currentTradeOffer = { WOOD: 0, BRICK: 0, WHEAT: 0, SHEEP: 0, ORE: 0 };
+        let currentTradeWant = { WOOD: 0, BRICK: 0, WHEAT: 0, SHEEP: 0, ORE: 0 };
+        let humanDiscardState = { WOOD: 0, BRICK: 0, WHEAT: 0, SHEEP: 0, ORE: 0 };
+        let discardTarget = 0;
+        let resolveDiscardPromise = null;
+        let hoverRemoveVert = -1;
+
+        // Visual CSS Dots layout mapper
+        const DIE_DOT_PATTERNS = {
+            1: [4],
+            2: [0, 8],
+            3: [0, 4, 8],
+            4: [0, 2, 6, 8],
+            5: [0, 2, 4, 6, 8],
+            6: [0, 2, 3, 5, 6, 8]
+        };
+
+        function drawCSSDie(dieId, val) {
+            const dieEl = document.getElementById(dieId);
+            if (!dieEl) return;
+            dieEl.innerHTML = '';
+            const pattern = DIE_DOT_PATTERNS[val] || [];
+            for (let i = 0; i < 9; i++) {
+                const dot = document.createElement('div');
+                dot.className = 'dot' + (pattern.includes(i) ? ' active' : '');
+                dieEl.appendChild(dot);
+            }
+        }
+
+        // Updated scaling to support object-ratio canvas sizing accurately
+        function getMousePos(evt) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            let clientX = evt.clientX;
+            let clientY = evt.clientY;
+            
+            if (evt.changedTouches && evt.changedTouches.length > 0) {
+                clientX = evt.changedTouches[0].clientX;
+                clientY = evt.changedTouches[0].clientY;
+            }
+            
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+
+        function shuffle(arr) {
+            for (let i = arr.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [arr[i], arr[j]] = [arr[j], arr[i]];
+            }
+            return arr;
+        }
+
+        function initBoard() {
+            let resPool = shuffle([...BASE_RESOURCES]);
+            let tokenPool = shuffle([...BASE_TOKENS]);
+            
+            G.devDeck = shuffle([
+                ...Array(14).fill('KNIGHT'), ...Array(5).fill('VP'), 
+                ...Array(2).fill('MONOPOLY'), ...Array(2).fill('ROAD_BUILDING'), ...Array(2).fill('YEAR_OF_PLENTY')
+            ]);
+            
+            G.hexes = []; G.vertices = []; G.edges = [];
+            let hexIdx = 0;
+            MAP_ROW_LAYOUT.forEach(row => {
+                for (let i = 0; i < row.count; i++) {
+                    let q = row.qStart + i, r = row.r;
+                    let res = resPool[hexIdx];
+                    let token = (res === 'DESERT') ? null : tokenPool.pop();
+                    let x = centerX + hexRadius * Math.sqrt(3) * (q + r/2);
+                    let y = centerY + hexRadius * 1.5 * r;
+
+                    if (res === 'DESERT') G.robberHexIndex = hexIdx;
+                    G.hexes.push({ id: hexIdx, q, r, x, y, type: res, token, vertexIds: [], edgeIds: [] });
+                    hexIdx++;
+                }
+            });
+
+            G.hexes.forEach(hex => {
+                let localVerts = [];
+                for (let i = 0; i < 6; i++) {
+                    let angle = (Math.PI / 3) * i - (Math.PI / 6);
+                    let vx = hex.x + hexRadius * Math.cos(angle);
+                    let vy = hex.y + hexRadius * Math.sin(angle);
+                    let vId = G.vertices.findIndex(v => Math.hypot(v.x - vx, v.y - vy) < 10);
+                    if (vId === -1) {
+                        G.vertices.push({ id: G.vertices.length, x: vx, y: vy, building: null, owner: null });
+                        vId = G.vertices.length - 1;
+                    }
+                    localVerts.push(vId);
+                    hex.vertexIds.push(vId);
+                }
+                for (let i = 0; i < 6; i++) {
+                    let minV = Math.min(localVerts[i], localVerts[(i + 1) % 6]);
+                    let maxV = Math.max(localVerts[i], localVerts[(i + 1) % 6]);
+                    let eId = G.edges.findIndex(e => e.v1 === minV && e.v2 === maxV);
+                    if (eId === -1) {
+                        G.edges.push({ id: G.edges.length, v1: minV, v2: maxV, owner: null, hexCount: 0, port: null });
+                        eId = G.edges.length - 1;
+                    }
+                    G.edges[eId].hexCount++;
+                    hex.edgeIds.push(eId);
+                }
+            });
+
+            let outerEdges = G.edges.filter(e => e.hexCount === 1);
+            outerEdges = shuffle(outerEdges);
+            let selectedPorts = [];
+            let portTypes = ['3:1','3:1','3:1','3:1','WOOD','BRICK','WHEAT','SHEEP','ORE'];
+            
+            for (let e of outerEdges) {
+                let conflict = selectedPorts.some(pEdge => pEdge.v1 === e.v1 || pEdge.v1 === e.v2 || pEdge.v2 === e.v1 || pEdge.v2 === e.v2);
+                if (!conflict) {
+                    e.port = portTypes.pop();
+                    selectedPorts.push(e);
+                    if (portTypes.length === 0) break;
+                }
+            }
+        }
+
+        async function startGame() {
+            // Native Fullscreen Support for immersive web-app feel
+            let elem = document.documentElement;
+            if (elem.requestFullscreen) { elem.requestFullscreen().catch(()=>{}); }
+            else if (elem.webkitRequestFullscreen) { elem.webkitRequestFullscreen().catch(()=>{}); }
+
+            const pCount = parseInt(document.getElementById('player-count').value);
+            G.vpGoal = parseInt(document.getElementById('vp-goal').value);
+            
+            G.players = [];
+            for (let i = 0; i < pCount; i++) {
+                G.players.push({
+                    ...PLAYER_CONFIGS[i],
+                    resources: { WOOD: 0, BRICK: 0, WHEAT: 0, SHEEP: 0, ORE: 0 },
+                    devCards: { KNIGHT: 0, VP: 0, MONOPOLY: 0, ROAD_BUILDING: 0, YEAR_OF_PLENTY: 0 },
+                    newDevCards: { KNIGHT: 0, VP: 0, MONOPOLY: 0, ROAD_BUILDING: 0, YEAR_OF_PLENTY: 0 },
+                    playedKnights: 0, roadLength: 0, victoryPoints: 0, publicVPs: 0
+                });
+            }
+
+            initBoard();
+            drawCSSDie('die1', 1);
+            drawCSSDie('die2', 1);
+            document.getElementById('setup-screen').style.display = 'none';
+            populateTradeMenus();
+            
+            await executeInitialRolls();
+        }
+
+        async function executeInitialRolls() {
+            G.phase = 'INIT_ROLL';
+            G.lastAction = '';
+            updateUI();
+            
+            let maxRoll = 0;
+            let startingPlayer = 0;
+            
+            // Create a structural wrapper log block for the initial roll parameters
+            startNewLogTurnBlock("System Setup");
+            
+            for (let i = 0; i < G.players.length; i++) {
+                let p = G.players[i];
+                let r1 = Math.floor(Math.random() * 6) + 1;
+                let r2 = Math.floor(Math.random() * 6) + 1;
+                let total = r1 + r2;
+                
+                for(let spin=0; spin<10; spin++) {
+                    drawCSSDie('die1', Math.floor(Math.random() * 6) + 1);
+                    drawCSSDie('die2', Math.floor(Math.random() * 6) + 1);
+                    await delay(40);
+                }
+                drawCSSDie('die1', r1);
+                drawCSSDie('die2', r2);
+                
+                logMessage(`🎲 ${p.name} rolled a ${total} for turn order.`);
+                await delay(500);
+                
+                let score = total + Math.random(); 
+                if (score > maxRoll) {
+                    maxRoll = score;
+                    startingPlayer = i;
+                }
+            }
+            
+            logMessage(`🏆 ${G.players[startingPlayer].name} goes first!`, true);
+            await delay(1000);
+            
+            G.turnOrder = [];
+            for(let i=0; i<G.players.length; i++) {
+                G.turnOrder.push((startingPlayer + i) % G.players.length);
+            }
+            
+            G.phase = 'SETUP'; G.setupStep = 0; G.setupDirection = 1; G.turnIndex = 0;
+            G.activePlayerIdx = G.turnOrder[0]; G.buildMode = 'settlement';
+            G.lastAction = '';
+            
+            startNewLogTurnBlock(G.players[G.activePlayerIdx].name + " (Setup 1)");
+            updateUI(); checkCurrentPlayerTurn();
+        }
+
+        function getPlayerTradeRates(pId) {
+            let rates = { WOOD: 4, BRICK: 4, WHEAT: 4, SHEEP: 4, ORE: 4 };
+            let pVerts = G.vertices.filter(v => v.owner === pId);
+            
+            for (let v of pVerts) {
+                let vIdx = G.vertices.indexOf(v);
+                let connectedEdges = G.edges.filter(e => e.v1 === vIdx || e.v2 === vIdx);
+                for (let e of connectedEdges) {
+                    if (e.port === '3:1') {
+                        Object.keys(rates).forEach(r => rates[r] = Math.min(rates[r], 3));
+                    } else if (e.port) {
+                        rates[e.port] = 2;
+                    }
+                }
+            }
+            return rates;
+        }
+
+        // --- DISCARD UI ---
+        function openDiscardModal(targetAmt) {
+            return new Promise(resolve => {
+                discardTarget = targetAmt;
+                humanDiscardState = { WOOD: 0, BRICK: 0, WHEAT: 0, SHEEP: 0, ORE: 0 };
+                resolveDiscardPromise = resolve;
+                renderDiscardModal();
+                document.getElementById('discard-modal').style.display = 'flex';
+            });
+        }
+
+        function modifyDiscard(res, delta) {
+            let p = G.players[0];
+            let currentSelected = Object.values(humanDiscardState).reduce((a,b)=>a+b, 0);
+            let newVal = humanDiscardState[res] + delta;
+            
+            if (newVal >= 0 && newVal <= p.resources[res]) {
+                if (delta > 0 && currentSelected >= discardTarget) return; 
+                humanDiscardState[res] = newVal;
+                renderDiscardModal();
+            }
+        }
+
+        function renderDiscardModal() {
+            let p = G.players[0]; let html = '';
+            Object.keys(RESOURCE_TYPES).forEach(r => {
+                if(r === 'DESERT') return;
+                html += `
+                <div class="trade-item-row">
+                    <span class="trade-label">${RESOURCE_TYPES[r].short} (Have: ${p.resources[r]})</span>
+                    <div class="trade-item-controls">
+                        <button type="button" class="inc-btn" onclick="modifyDiscard('${r}', -1)">-</button>
+                        <span class="trade-val">${humanDiscardState[r]}</span>
+                        <button type="button" class="inc-btn" onclick="modifyDiscard('${r}', 1)">+</button>
+                    </div>
+                </div>`;
+            });
+            document.getElementById('discard-list').innerHTML = html;
+            
+            let currentSelected = Object.values(humanDiscardState).reduce((a,b)=>a+b, 0);
+            document.getElementById('discard-target-amt').innerText = discardTarget;
+            document.getElementById('discard-req-amt').innerText = discardTarget;
+            document.getElementById('discard-current-amt').innerText = currentSelected;
+            
+            document.getElementById('submit-discard-btn').disabled = (currentSelected !== discardTarget);
+        }
+
+        function submitHumanDiscard() {
+            let p = G.players[0];
+            Object.keys(humanDiscardState).forEach(r => { p.resources[r] -= humanDiscardState[r]; });
+            document.getElementById('discard-modal').style.display = 'none';
+            updateUI();
+            if (resolveDiscardPromise) resolveDiscardPromise();
+        }
+
+        // --- ADVANCED TRADE UI ---
+        function openTradeModal() {
+            document.getElementById('adv-trade-status').innerHTML = '';
+            currentTradeOffer = { WOOD: 0, BRICK: 0, WHEAT: 0, SHEEP: 0, ORE: 0 };
+            currentTradeWant = { WOOD: 0, BRICK: 0, WHEAT: 0, SHEEP: 0, ORE: 0 };
+            
+            let targetSelect = document.getElementById('adv-trade-target');
+            targetSelect.innerHTML = '<option value="all">Any AI</option>';
+            G.players.forEach(p => { if (p.isAI) targetSelect.insertAdjacentHTML('beforeend', `<option value="${p.id}">${p.name}</option>`); });
+
+            renderTradeModal(); document.getElementById('advanced-trade-modal').style.display = 'flex';
+        }
+
+        function closeTradeModal() { document.getElementById('advanced-trade-modal').style.display = 'none'; }
+
+        function modifyTrade(type, res, delta) {
+            let p = G.players[0]; 
+            if (type === 'offer') {
+                let newVal = currentTradeOffer[res] + delta;
+                if (newVal >= 0 && newVal <= p.resources[res]) currentTradeOffer[res] = newVal;
+            } else {
+                let newVal = currentTradeWant[res] + delta;
+                if (newVal >= 0) currentTradeWant[res] = newVal;
+            }
+            renderTradeModal();
+        }
+
+        function renderTradeModal() {
+            let p = G.players[0];
+            let offerHTML = ''; let wantHTML = '';
+            Object.keys(RESOURCE_TYPES).forEach(r => {
+                if(r === 'DESERT') return;
+                offerHTML += `
+                <div class="trade-item-row">
+                    <span class="trade-label">${RESOURCE_TYPES[r].short} (Have: ${p.resources[r]})</span>
+                    <div class="trade-item-controls">
+                        <button type="button" class="inc-btn" onclick="modifyTrade('offer', '${r}', -1)">-</button>
+                        <span class="trade-val">${currentTradeOffer[r]}</span>
+                        <button type="button" class="inc-btn" onclick="modifyTrade('offer', '${r}', 1)">+</button>
+                    </div>
+                </div>`;
+                wantHTML += `
+                <div class="trade-item-row">
+                    <span class="trade-label">${RESOURCE_TYPES[r].short}</span>
+                    <div class="trade-item-controls">
+                        <button type="button" class="inc-btn" onclick="modifyTrade('want', '${r}', -1)">-</button>
+                        <span class="trade-val">${currentTradeWant[r]}</span>
+                        <button type="button" class="inc-btn" onclick="modifyTrade('want', '${r}', 1)">+</button>
+                    </div>
+                </div>`;
+            });
+            document.getElementById('trade-offer-list').innerHTML = offerHTML;
+            document.getElementById('trade-want-list').innerHTML = wantHTML;
+
+            let totalOffered = Object.values(currentTradeOffer).reduce((a,b)=>a+b, 0);
+            let totalWanted = Object.values(currentTradeWant).reduce((a,b)=>a+b, 0);
+            document.getElementById('submit-adv-trade-btn').disabled = (totalOffered === 0 && totalWanted === 0);
+        }
+
+        async function handleAdvancedTradeProposal() {
+            let totalOffered = Object.values(currentTradeOffer).reduce((a,b)=>a+b, 0);
+            let totalWanted = Object.values(currentTradeWant).reduce((a,b)=>a+b, 0);
+            if (totalOffered === 0 && totalWanted === 0) return;
+
+            let targetId = document.getElementById('adv-trade-target').value;
+            let targets = targetId === 'all' ? G.players.filter(x => x.isAI) : [G.players.find(x => x.id == targetId)];
+            
+            let tradeAccepted = false; let human = G.players[0];
+            let statusDiv = document.getElementById('adv-trade-status');
+            statusDiv.innerHTML = '';
+
+            for (let ai of targets) {
+                let canAfford = Object.keys(currentTradeWant).every(r => ai.resources[r] >= currentTradeWant[r]);
+                if (!canAfford) continue;
+
+                let score = 0;
+                Object.keys(currentTradeOffer).forEach(r => {
+                    let count = currentTradeOffer[r];
+                    for(let i=0; i<count; i++) {
+                        let currentAmt = ai.resources[r] + i;
+                        if (currentAmt === 0) score += 2.0;       
+                        else if (currentAmt === 1) score += 1.0;  
+                        else score += 0.5;                        
+                    }
+                });
+                
+                Object.keys(currentTradeWant).forEach(r => {
+                    let count = currentTradeWant[r];
+                    for(let i=0; i<count; i++) {
+                        let currentAmt = ai.resources[r] - i;
+                        if (currentAmt <= 1) score -= 2.0;       
+                        else if (currentAmt === 2) score -= 1.0; 
+                        else score -= 0.5;                       
+                    }
+                });
+
+                if (score + ((Math.random() * 1.5) - 0.5) >= 0.5) {
+                    Object.keys(currentTradeOffer).forEach(r => { human.resources[r] -= currentTradeOffer[r]; ai.resources[r] += currentTradeOffer[r]; });
+                    Object.keys(currentTradeWant).forEach(r => { human.resources[r] += currentTradeWant[r]; ai.resources[r] -= currentTradeWant[r]; });
+                    
+                    let msg = `🤝 ${ai.name} accepted your multi-card trade!`;
+                    G.lastAction = 'Completed Trade';
+                    logMessage(msg, true, true);
+                    statusDiv.innerHTML = `<span style="color: #4caf50;">${msg}</span>`;
+                    tradeAccepted = true; 
+                    
+                    currentTradeOffer = { WOOD: 0, BRICK: 0, WHEAT: 0, SHEEP: 0, ORE: 0 };
+                    currentTradeWant = { WOOD: 0, BRICK: 0, WHEAT: 0, SHEEP: 0, ORE: 0 };
+                    
+                    updateUI(); renderTradeModal();
+                    break;
+                }
+            }
+            if (!tradeAccepted) { 
+                let msg = `❌ Trade Rejected: No AI accepted your terms.`;
+                logMessage(msg); statusDiv.innerHTML = `<span style="color: #e57373;">${msg}</span>`;
+            }
+        }
+
+        // --- GAME LOOP ---
+        function advanceTurnLoop() {
+            G.lastAction = '';
+            if (G.phase === 'SETUP') {
+                let numP = G.players.length; G.setupStep++;
+                if (G.setupStep === numP * 2) {
+                    G.phase = 'ROLL'; G.activePlayerIdx = G.turnOrder[0]; G.turnIndex = 0; G.buildMode = null;
+                    startNewLogTurnBlock(G.players[G.activePlayerIdx].name + " (Turn 1)");
+                    logMessage("Draft phase completed. Regular turns begin!");
+                } else if (G.setupStep === numP) {
+                    G.setupDirection = 0; G.buildMode = 'settlement';
+                    let idx = (numP * 2 - 1 - G.setupStep); G.activePlayerIdx = G.turnOrder[idx];
+                    startNewLogTurnBlock(G.players[G.activePlayerIdx].name + " (Setup 2)");
+                } else {
+                    let idx = G.setupStep < numP ? G.setupStep : (numP * 2 - 1 - G.setupStep);
+                    G.activePlayerIdx = G.turnOrder[idx]; G.buildMode = 'settlement';
+                    let setupLabel = G.setupStep < numP ? "Setup 1" : "Setup 2";
+                    startNewLogTurnBlock(G.players[G.activePlayerIdx].name + " (" + setupLabel + ")");
+                }
+            } else {
+                let p = G.players[G.activePlayerIdx];
+                Object.keys(p.newDevCards).forEach(k => { p.devCards[k] += p.newDevCards[k]; p.newDevCards[k] = 0; });
+                G.devCardPlayedThisTurn = false; G.freeRoads = 0;
+                
+                G.turnIndex = (G.turnIndex + 1) % G.players.length;
+                G.activePlayerIdx = G.turnOrder[G.turnIndex]; 
+                G.phase = 'ROLL'; G.buildMode = null;
+                
+                startNewLogTurnBlock(G.players[G.activePlayerIdx].name);
+            }
+            updateUI(); checkCurrentPlayerTurn();
+        }
+
+        function checkCurrentPlayerTurn() {
+            let active = G.players[G.activePlayerIdx];
+            if (active && active.isAI && G.phase !== 'INIT_ROLL') runAILogic(active);
+        }
+
+        function handleEndTurn() {
+            if (G.phase === 'ROLL' || G.phase === 'ROBBER' || G.phase === 'INIT_ROLL' || G.phase === 'GAME_OVER') return;
+            G.buildMode = null; G.freeRoads = 0;
+            advanceTurnLoop();
+        }
+
+        function setBuildMode(mode) {
+            if (G.phase !== 'MAIN') return;
+            G.buildMode = (G.buildMode === mode) ? null : mode;
+            updateUI();
+        }
+
+        // --- ACHIEVEMENTS ---
+        function getLongestRoad(pId) {
+            let playerEdges = G.edges.filter(e => e.owner === pId);
+            if (playerEdges.length === 0) return 0;
+            
+            let adj = {};
+            playerEdges.forEach(e => {
+                if (!adj[e.v1]) adj[e.v1] = [];
+                if (!adj[e.v2]) adj[e.v2] = [];
+                adj[e.v1].push(e); adj[e.v2].push(e);
+            });
+            
+            let maxLen = 0;
+            function dfs(currentNode, visitedEdges, currentLen) {
+                maxLen = Math.max(maxLen, currentLen);
+                let edges = adj[currentNode] || [];
+                for (let e of edges) {
+                    if (!visitedEdges.has(e.id)) {
+                        let vert = G.vertices[currentNode];
+                        // Opponent's Town cuts the path!
+                        if (vert.owner !== null && vert.owner !== pId) continue;
+                        visitedEdges.add(e.id);
+                        let nextNode = (e.v1 === currentNode) ? e.v2 : e.v1;
+                        dfs(nextNode, visitedEdges, currentLen + 1);
+                        visitedEdges.delete(e.id);
+                    }
+                }
+            }
+            Object.keys(adj).forEach(v => { dfs(parseInt(v), new Set(), 0); });
+            return maxLen;
+        }
+
+        function recalculateAchievements() {
+            let playerRoads = G.players.map(p => getLongestRoad(p.id));
+            let currentHolder = G.longestRoadPlayer;
+            let bestLength = Math.max(...playerRoads);
+            
+            let playersWithBest = [];
+            for(let i=0; i<G.players.length; i++) {
+                if (playerRoads[i] === bestLength) playersWithBest.push(i);
+            }
+            
+            if (bestLength >= 5) {
+                if (currentHolder !== null && playersWithBest.includes(currentHolder)) {
+                    // Current holder keeps it on a tie
+                } else if (playersWithBest.length === 1) {
+                    if (currentHolder !== playersWithBest[0]) {
+                        G.longestRoadPlayer = playersWithBest[0];
+                        logMessage(`🏆 ${G.players[G.longestRoadPlayer].name} took Longest Road! (${bestLength})`, true);
+                    }
+                } else {
+                    // Tie but current holder isn't one of them, goes back to bank
+                    if (currentHolder !== null) {
+                        G.longestRoadPlayer = null;
+                        logMessage(`⚖️ Longest Road was broken and returned to the bank!`, true);
+                    }
+                }
+            } else {
+                if (currentHolder !== null) {
+                    G.longestRoadPlayer = null;
+                    logMessage(`📉 Longest Road was lost!`, true);
+                }
+            }
+            
+            G.players.forEach(p => p.roadLength = playerRoads[p.id]);
+            G.players.forEach(p => recalculateVPs(p.id));
+        }
+
+        function checkLargestArmy(pId) {
+            let knights = G.players[pId].playedKnights;
+            if (knights >= 3) {
+                if (G.largestArmyPlayer === null) {
+                    G.largestArmyPlayer = pId;
+                    logMessage(`🛡️ ${G.players[pId].name} claimed Largest Army! (${knights})`, true);
+                } else if (G.largestArmyPlayer !== pId && knights > G.players[G.largestArmyPlayer].playedKnights) {
+                    G.largestArmyPlayer = pId;
+                    logMessage(`🛡️ ${G.players[pId].name} took Largest Army! (${knights})`, true);
+                }
+            }
+            G.players.forEach((p, idx) => recalculateVPs(idx));
+        }
+
+        function recalculateVPs(pId) {
+            let p = G.players[pId]; let points = 0;
+            G.vertices.forEach(v => { if (v.owner === pId) points += (v.building === 'city') ? 2 : 1; });
+            
+            p.publicVPs = points + (G.longestRoadPlayer === p.id ? 2 : 0) + (G.largestArmyPlayer === p.id ? 2 : 0);
+            p.victoryPoints = p.publicVPs + p.devCards.VP + p.newDevCards.VP;
+            checkWinCondition(p);
+        }
+
+        function checkWinCondition(player) {
+            if (player.victoryPoints >= G.vpGoal && G.phase !== 'GAME_OVER') {
+                G.phase = 'GAME_OVER';
+                showModal("🏆 GAME OVER!", `${player.name} wins with ${player.victoryPoints} Victory Points!`, [{text: "Play Again", value: "ok"}])
+                .then(() => location.reload());
+            }
+        }
+
+        // --- ROLLING & ROBBER ---
+        async function handleRoll() {
+            if (G.phase !== 'ROLL') return;
+            
+            document.getElementById('roll-btn').disabled = true;
+
+            let roll1 = Math.floor(Math.random() * 6) + 1; 
+            let roll2 = Math.floor(Math.random() * 6) + 1;
+            let roll = roll1 + roll2;
+
+            for(let i=0; i<10; i++) {
+                drawCSSDie('die1', Math.floor(Math.random() * 6) + 1);
+                drawCSSDie('die2', Math.floor(Math.random() * 6) + 1);
+                await delay(40);
+            }
+            G.dice[0] = roll1; G.dice[1] = roll2;
+            drawCSSDie('die1', roll1);
+            drawCSSDie('die2', roll2);
+
+            logMessage(`🎲 ${G.players[G.activePlayerIdx].name} rolled a ${roll}`);
+            G.lastAction = `Rolled a ${roll} 🎲`;
+
+            if (roll === 7) {
+                logMessage(`🏜️ Robber awakened! Processing discards...`, true);
+                await processDiscards();
+                G.postRobberPhase = 'MAIN';
+                G.phase = 'ROBBER';
+                logMessage(`🥷 ${G.players[G.activePlayerIdx].name} must move the Robber.`);
+            } else {
+                distributeResources(roll);
+                G.phase = 'MAIN';
+            }
+            updateUI();
+        }
+
+        async function processDiscards() {
+            for (let p of G.players) {
+                let total = Object.values(p.resources).reduce((a,b)=>a+b,0);
+                if (total > 7) {
+                    let toDrop = Math.floor(total / 2);
+                    if (p.isAI) {
+                        for(let i=0; i<toDrop; i++) {
+                            let avail = Object.keys(p.resources).filter(k => p.resources[k] > 0);
+                            let drop = avail[Math.floor(Math.random() * avail.length)];
+                            p.resources[drop]--;
+                        }
+                        logMessage(`${p.name} discarded ${toDrop} resources.`, false, false);
+                    } else {
+                        await openDiscardModal(toDrop);
+                        logMessage(`You discarded ${toDrop} resources.`, false, false);
+                    }
+                }
+            }
+        }
+
+        function distributeResources(roll) {
+            let gains = {}; G.players.forEach(p => gains[p.id] = {});
+            G.hexes.forEach((hex, idx) => {
+                if (hex.token === roll && idx !== G.robberHexIndex) {
+                    hex.vertexIds.forEach(vId => {
+                        let vert = G.vertices[vId];
+                        if (vert.owner !== null) {
+                            let yieldQty = (vert.building === 'city') ? 2 : 1;
+                            G.players[vert.owner].resources[hex.type] += yieldQty;
+                            gains[vert.owner][hex.type] = (gains[vert.owner][hex.type] || 0) + yieldQty;
+                        }
+                    });
+                }
+            });
+            G.players.forEach(p => {
+                let pGains = gains[p.id]; let keys = Object.keys(pGains);
+                if (keys.length > 0) logMessage(`${p.name} got: ${keys.map(k => `${pGains[k]}x ${RESOURCE_TYPES[k].short}`).join(', ')}`, false, true);
+            });
+        }
+
+        async function moveRobber(hexId, stealerId) {
+            G.robberHexIndex = hexId;
+            let hex = G.hexes[hexId]; let victims = new Set();
+            hex.vertexIds.forEach(v => {
+                let owner = G.vertices[v].owner;
+                if (owner !== null && owner !== stealerId) victims.add(owner);
+            });
+            
+            let validVictims = Array.from(victims).filter(v => Object.values(G.players[v].resources).reduce((a,b)=>a+b,0) > 0);
+            
+            if (validVictims.length > 0) {
+                let victimId;
+                if (G.players[stealerId].isAI) {
+                    victimId = validVictims[0];
+                    for (let v of validVictims) {
+                        if (G.players[v].publicVPs > G.players[victimId].publicVPs) victimId = v;
+                    }
+                } else {
+                    if (validVictims.length === 1) {
+                        victimId = validVictims[0];
+                    } else {
+                        let buttons = validVictims.map(v => ({text: G.players[v].name, value: v}));
+                        let chosen = await showModal("Robber", "Choose a player to steal from:", buttons);
+                        victimId = parseInt(chosen);
+                    }
+                }
+
+                let victim = victimId; let resList = [];
+                Object.keys(G.players[victim].resources).forEach(r => {
+                    for(let i=0; i<G.players[victim].resources[r]; i++) resList.push(r);
+                });
+                let stolen = resList[Math.floor(Math.random() * resList.length)];
+                G.players[victim].resources[stolen]--;
+                G.players[stealerId].resources[stolen]++;
+                
+                if (G.players[stealerId].isAI) logMessage(`🥷 ${G.players[stealerId].name} stole a card from ${G.players[victim].name}.`, false, true);
+                else logMessage(`🥷 You stole 1x ${RESOURCE_TYPES[stolen].short} from ${G.players[victim].name}.`, true, true);
+            } else {
+                logMessage(`🥷 Robber moved, but no one was robbed.`);
+            }
+            G.lastAction = 'Moved the Robber 🥷';
+            G.phase = G.postRobberPhase || 'MAIN'; updateUI();
+        }
+
+        // --- CONSTRAINTS ---
+        const COSTS = {
+            road: { WOOD: 1, BRICK: 1 }, settlement: { WOOD: 1, BRICK: 1, WHEAT: 1, SHEEP: 1 },
+            city: { WHEAT: 2, ORE: 3 }, devCard: { WHEAT: 1, SHEEP: 1, ORE: 1 }
+        };
+
+        function canAfford(player, cost) { return Object.keys(cost).every(res => player.resources[res] >= cost[res]); }
+        function deductResources(player, cost) { Object.keys(cost).forEach(res => player.resources[res] -= cost[res]); }
+
+        function isValidSettlement(vId, pId, isSetup) {
+            let vert = G.vertices[vId];
+            if (vert.building !== null) return false;
+            let connectedEdges = G.edges.filter(e => e.v1 === vId || e.v2 === vId);
+            for (let e of connectedEdges) {
+                let neighborId = (e.v1 === vId) ? e.v2 : e.v1;
+                if (G.vertices[neighborId].building !== null) return false;
+            }
+            if (isSetup) return true;
+            return connectedEdges.some(e => e.owner === pId);
+        }
+
+        function isValidRoad(eId, pId, isSetup) {
+            let edge = G.edges[eId];
+            if (edge.owner !== null) return false;
+            if (isSetup) return (edge.v1 === isSetup.lastVert || edge.v2 === isSetup.lastVert);
+            if (G.vertices[edge.v1].owner === pId || G.vertices[edge.v2].owner === pId) return true;
+            
+            let adjacentEdges = G.edges.filter(e => e.id !== eId && (e.v1 === edge.v1 || e.v2 === edge.v1 || e.v1 === edge.v2 || e.v2 === edge.v2));
+            return adjacentEdges.some(e => {
+                if (e.owner !== pId) return false;
+                let sharedVert = (e.v1 === edge.v1 || e.v2 === edge.v1) ? edge.v1 : edge.v2;
+                return (G.vertices[sharedVert].owner === null || G.vertices[sharedVert].owner === pId);
+            });
+        }
+
+        // --- ACTIONS ---
+        function executeBuildSettlement(vId, pId) {
+            let isSetup = G.phase === 'SETUP';
+            if (!isValidSettlement(vId, pId, isSetup)) return false;
+            if (!isSetup) deductResources(G.players[pId], COSTS.settlement);
+
+            G.vertices[vId].building = 'settlement'; G.vertices[vId].owner = pId;
+            recalculateAchievements();
+            logMessage(`🏠 ${G.players[pId].name} built a Town`);
+            G.lastAction = 'Built a Town 🏠';
+
+            if (isSetup && G.setupDirection === 0) {
+                G.hexes.forEach(hex => {
+                    if (hex.vertexIds.includes(vId) && hex.type !== 'DESERT') G.players[pId].resources[hex.type]++;
+                });
+            }
+            if (isSetup) { G.lastSetupVert = vId; G.buildMode = 'road'; } else G.buildMode = null;
+            return true;
+        }
+
+        function removeSettlement(vId, pId) {
+            let vert = G.vertices[vId];
+            if (vert.owner !== pId || vert.building !== 'settlement' || G.phase !== 'SETUP') return false;
+            if (G.buildMode !== 'settlement' && G.buildMode !== 'road') return false;
+            if (G.buildMode === 'road' && G.lastSetupVert !== vId) return false;
+            
+            vert.building = null; vert.owner = null; recalculateAchievements();
+            if (G.setupDirection === 0) {
+                G.hexes.forEach(hex => {
+                    if (hex.vertexIds.includes(vId) && hex.type !== 'DESERT') 
+                        G.players[pId].resources[hex.type] = Math.max(0, G.players[pId].resources[hex.type] - 1);
+                });
+            }
+            G.buildMode = 'settlement'; hoverRemoveVert = -1;
+            logMessage(`Undo: ${G.players[pId].name} removed their setup Town.`);
+            return true;
+        }
+
+        function executeBuildRoad(eId, pId) {
+            let isSetup = G.phase === 'SETUP';
+            let validationContext = isSetup ? { lastVert: G.lastSetupVert } : false;
+            if (!isValidRoad(eId, pId, validationContext)) return false;
+
+            if (!isSetup) {
+                if (G.freeRoads > 0) G.freeRoads--;
+                else deductResources(G.players[pId], COSTS.road);
+            }
+
+            G.edges[eId].owner = pId;
+            logMessage(`🛤️ ${G.players[pId].name} built a Road`);
+            G.lastAction = 'Built a Road 🛤️';
+            recalculateAchievements();
+
+            if (isSetup) advanceTurnLoop();
+            else if (G.freeRoads === 0) G.buildMode = null;
+            return true;
+        }
+
+        function executeBuildCity(vId, pId) {
+            let vert = G.vertices[vId];
+            if (vert.owner !== pId || vert.building !== 'settlement') return false;
+            deductResources(G.players[pId], COSTS.city);
+            vert.building = 'city'; recalculateAchievements();
+            logMessage(`🏙️ ${G.players[pId].name} upgraded to a City`);
+            G.lastAction = 'Built a City 🏙️';
+            G.buildMode = null; return true;
+        }
+
+        function buyDevCard(pId = G.activePlayerIdx) {
+            let p = G.players[pId];
+            if (!canAfford(p, COSTS.devCard) || G.devDeck.length === 0) return;
+            deductResources(p, COSTS.devCard);
+            
+            let card = G.devDeck.pop();
+            p.newDevCards[card]++;
+            if(card === 'VP') recalculateAchievements();
+
+            if (p.isAI) logMessage(`📜 ${p.name} bought a Dev Card`);
+            else logMessage(`📜 You bought a ${DEV_TYPES[card].name}!`);
+            G.lastAction = 'Bought Dev Card 📜';
+            updateUI();
+        }
+
+        async function playDevCard(cardType, pId = G.activePlayerIdx) {
+            let p = G.players[pId];
+            if (p.devCards[cardType] <= 0 || G.devCardPlayedThisTurn || (G.phase !== 'MAIN' && !(G.phase === 'ROLL' && cardType === 'KNIGHT'))) return;
+            
+            p.devCards[cardType]--; G.devCardPlayedThisTurn = true;
+            logMessage(`🃏 ${p.name} played a ${DEV_TYPES[cardType].name}!`, true);
+            G.lastAction = 'Played ' + DEV_TYPES[cardType].name;
+
+            if (cardType === 'KNIGHT') {
+                p.playedKnights++; checkLargestArmy(p.id);
+                G.postRobberPhase = G.phase;
+                G.phase = 'ROBBER';
+                if(!p.isAI) logMessage("Select a hex to place the Robber.");
+            } 
+            else if (cardType === 'ROAD_BUILDING') {
+                G.freeRoads = 2;
+                if(!p.isAI) G.buildMode = 'road';
+            } 
+            else if (cardType === 'MONOPOLY') {
+                let chosenRes;
+                if (p.isAI) {
+                    let needs = Object.keys(p.resources).sort((a,b) => p.resources[a] - p.resources[b]);
+                    chosenRes = needs[0];
+                } else {
+                    let selHtml = `<select id="mono-sel">`;
+                    Object.keys(RESOURCE_TYPES).filter(r=>r!=='DESERT').forEach(r => selHtml+=`<option value="${r}">${RESOURCE_TYPES[r].short} ${RESOURCE_TYPES[r].name}</option>`);
+                    selHtml += `</select>`;
+                    chosenRes = await showModal("Play Monopoly", "Choose a resource to steal from all players:<br><br>" + selHtml, [
+                        {text:"Steal All", getVal: () => document.getElementById('mono-sel').value}
+                    ]);
+                }
+                let totalStolen = 0;
+                G.players.forEach(op => {
+                    if(op.id !== p.id && op.resources[chosenRes] > 0) {
+                        totalStolen += op.resources[chosenRes];
+                        op.resources[chosenRes] = 0;
+                    }
+                });
+                p.resources[chosenRes] += totalStolen;
+                logMessage(`👑 ${p.name} monopolized ${totalStolen}x ${RESOURCE_TYPES[chosenRes].short}!`);
+            }
+            else if (cardType === 'YEAR_OF_PLENTY') {
+                let res1, res2;
+                if (p.isAI) {
+                    let needed = Object.keys(p.resources).sort((a,b) => p.resources[a] - p.resources[b]);
+                    res1 = needed[0]; res2 = needed[1] || needed[0];
+                } else {
+                    let selHtml = `<select id="yop-sel1">`;
+                    Object.keys(RESOURCE_TYPES).filter(r=>r!=='DESERT').forEach(r => selHtml+=`<option value="${r}">${RESOURCE_TYPES[r].short} ${RESOURCE_TYPES[r].name}</option>`);
+                    selHtml += `</select><br><br><select id="yop-sel2">`;
+                    Object.keys(RESOURCE_TYPES).filter(r=>r!=='DESERT').forEach(r => selHtml+=`<option value="${r}">${RESOURCE_TYPES[r].short} ${RESOURCE_TYPES[r].name}</option>`);
+                    selHtml += `</select>`;
+                    let resultStr = await showModal("Year of Plenty", "Choose 2 free resources:<br><br>" + selHtml, [
+                        {text:"Claim", getVal: () => document.getElementById('yop-sel1').value + ',' + document.getElementById('yop-sel2').value}
+                    ]);
+                    [res1, res2] = resultStr.split(',');
+                }
+                p.resources[res1]++; p.resources[res2]++;
+                logMessage(`🎁 ${p.name} claimed ${RESOURCE_TYPES[res1].short} and ${RESOURCE_TYPES[res2].short}.`);
+            }
+            
+            updateUI();
+            
+            if (p.isAI && G.phase !== 'MAIN') {
+                runAILogic(p);
+            }
+        }
+
+        // --- TRADING ---
+        function updateBankTradeUI() {
+            let pId = G.activePlayerIdx;
+            if(!G.players[pId] || G.players[pId].isAI) return;
+            let giveRes = document.getElementById('trade-give').value;
+            let getRes = document.getElementById('trade-get').value;
+            let rates = getPlayerTradeRates(pId);
+            let cost = rates[giveRes] || 4;
+            
+            let tradeBtn = document.getElementById('trade-btn');
+            tradeBtn.innerText = `Execute (${cost}:1)`;
+            
+            let p = G.players[pId];
+            if (G.phase !== 'MAIN' || giveRes === getRes || p.resources[giveRes] < cost) {
+                tradeBtn.disabled = true;
+            } else {
+                tradeBtn.disabled = false;
+            }
+        }
+
+        function handleBankTrade() {
+            let p = G.players[G.activePlayerIdx];
+            let giveRes = document.getElementById('trade-give').value;
+            let getRes = document.getElementById('trade-get').value;
+            
+            let rates = getPlayerTradeRates(p.id);
+            let cost = rates[giveRes] || 4;
+            
+            if (giveRes === getRes || p.resources[giveRes] < cost) return;
+            p.resources[giveRes] -= cost; p.resources[getRes] += 1;
+            logMessage(`🏦 ${p.name} bank-traded ${cost}x ${RESOURCE_TYPES[giveRes].short} for 1x ${RESOURCE_TYPES[getRes].short}`);
+            G.lastAction = 'Port Traded ⚓';
+            updateUI();
+        }
+
+        async function promptHumanForTrade(ai, offerRes, wantRes) {
+            let human = G.players[0];
+            let msg = `${ai.name} is offering <strong>1x ${RESOURCE_TYPES[offerRes].short}</strong> in exchange for your <strong>1x ${RESOURCE_TYPES[wantRes].short}</strong>.<br><br>
+            <div style="font-size:0.9rem; color:#aaa; margin-bottom: 10px;">
+                Your Cards: 🪵 ${human.resources.WOOD} | 🧱 ${human.resources.BRICK} | 🌾 ${human.resources.WHEAT} | 🐑 ${human.resources.SHEEP} | 🪨 ${human.resources.ORE}
+            </div>
+            Do you accept?`;
+            let result = await showModal("Trade Offer", msg, [
+                {text: "Accept", value: "YES"}, {text: "Decline", value: "NO", secondary: true}
+            ]);
+            return result === "YES";
+        }
+
+        // --- ARTIFICIAL INTELLIGENCE SYSTEM ---
+        async function runAILogic(ai) {
+            if (G.players[G.activePlayerIdx].id !== ai.id || G.phase === 'GAME_OVER') return;
+
+            if (G.phase === 'SETUP') {
+                if (G.buildMode === 'settlement') {
+                    await delay(1000);
+                    let bestV = -1, bestScore = -1;
+                    G.vertices.forEach((v, id) => {
+                        if (isValidSettlement(id, ai.id, true)) {
+                            let score = Math.random(); 
+                            G.hexes.forEach(h => { if (h.vertexIds.includes(id) && h.token) score += (6 - Math.abs(7 - h.token)); });
+                            if (score > bestScore) { bestScore = score; bestV = id; }
+                        }
+                    });
+                    executeBuildSettlement(bestV, ai.id); updateUI(); runAILogic(ai);
+                } else if (G.buildMode === 'road') {
+                    await delay(1000);
+                    let bestE = -1;
+                    G.edges.forEach((e, id) => { if (isValidRoad(id, ai.id, { lastVert: G.lastSetupVert })) bestE = id; });
+                    executeBuildRoad(bestE, ai.id); updateUI();
+                }
+            } 
+            else if (G.phase === 'ROBBER') {
+                await delay(1200);
+                let bestHex = -1; let highestEnemyPoints = -1;
+                G.hexes.forEach((hex, id) => {
+                    if (id !== G.robberHexIndex && hex.type !== 'DESERT') {
+                        let enemyValue = 0;
+                        hex.vertexIds.forEach(vId => {
+                            let owner = G.vertices[vId].owner;
+                            if (owner !== null && owner !== ai.id) enemyValue += (G.vertices[vId].building === 'city' ? 2 : 1);
+                        });
+                        if (enemyValue > highestEnemyPoints) { highestEnemyPoints = enemyValue; bestHex = id; }
+                    }
+                });
+                if(bestHex === -1) bestHex = (G.robberHexIndex + 1) % G.hexes.length;
+                await moveRobber(bestHex, ai.id);
+                runAILogic(ai); 
+            }
+            else if (G.phase === 'ROLL') {
+                await delay(1500); await handleRoll(); runAILogic(ai);
+            } 
+            else if (G.phase === 'MAIN') {
+                let actionTaken = true;
+                
+                while (actionTaken && G.phase === 'MAIN') {
+                    actionTaken = false;
+                    await delay(1500); 
+
+                    if (!G.devCardPlayedThisTurn) {
+                        if (ai.devCards.KNIGHT > 0) {
+                            let aiRobbed = G.hexes[G.robberHexIndex].vertexIds.some(v => G.vertices[v].owner === ai.id);
+                            if (aiRobbed || Math.random() < 0.3) { await playDevCard('KNIGHT', ai.id); return; }
+                        }
+                        if (!G.devCardPlayedThisTurn && ai.devCards.ROAD_BUILDING > 0 && G.freeRoads === 0 && Object.values(ai.resources).reduce((a,b)=>a+b,0) < 4) {
+                            await playDevCard('ROAD_BUILDING', ai.id); actionTaken = true; continue;
+                        }
+                        if (!G.devCardPlayedThisTurn && ai.devCards.YEAR_OF_PLENTY > 0) {
+                            if (canAfford(ai, {WOOD:1}) || canAfford(ai, {WHEAT:1})) { await playDevCard('YEAR_OF_PLENTY', ai.id); actionTaken = true; continue; }
+                        }
+                        if (!G.devCardPlayedThisTurn && ai.devCards.MONOPOLY > 0) {
+                            await playDevCard('MONOPOLY', ai.id); actionTaken = true; continue;
+                        }
+                    }
+
+                    if (canAfford(ai, COSTS.city)) {
+                        let tV = G.vertices.findIndex((v, id) => v.owner === ai.id && v.building === 'settlement');
+                        if (tV !== -1) { executeBuildCity(tV, ai.id); actionTaken = true; updateUI(); continue; }
+                    }
+                    if (!actionTaken && canAfford(ai, COSTS.settlement)) {
+                        let tV = G.vertices.findIndex((v, id) => isValidSettlement(id, ai.id, false));
+                        if (tV !== -1) { executeBuildSettlement(tV, ai.id); actionTaken = true; updateUI(); continue; }
+                    }
+                    if (!actionTaken && (canAfford(ai, COSTS.road) || G.freeRoads > 0)) {
+                        let tE = G.edges.findIndex((e, id) => isValidRoad(id, ai.id, false));
+                        if (tE !== -1) { executeBuildRoad(tE, ai.id); actionTaken = true; updateUI(); continue; }
+                    }
+
+                    if (!actionTaken && canAfford(ai, COSTS.devCard) && G.devDeck.length > 0) {
+                        buyDevCard(ai.id); actionTaken = true; continue;
+                    }
+
+                    if (!actionTaken) {
+                        let missing = []; let surplus = [];
+                        ['WOOD','BRICK','WHEAT','SHEEP'].forEach(r => {
+                            if (ai.resources[r] === 0) missing.push(r);
+                            if (ai.resources[r] >= 2) surplus.push(r);
+                        });
+                        
+                        if (missing.length === 1 && surplus.length > 0) {
+                            let want = missing[0]; let offer = surplus[0]; let human = G.players[0];
+                            if (human.resources[want] > 0) {
+                                let accepted = await promptHumanForTrade(ai, offer, want);
+                                if (accepted) {
+                                    ai.resources[offer]--; ai.resources[want]++;
+                                    human.resources[want]--; human.resources[offer]++;
+                                    logMessage(`🤝 You accepted trade from ${ai.name}! (${RESOURCE_TYPES[want].short} for ${RESOURCE_TYPES[offer].short})`, true, true);
+                                    G.lastAction = 'Completed Trade';
+                                    actionTaken = true; updateUI(); continue;
+                                }
+                            }
+                        }
+
+                        let rates = getPlayerTradeRates(ai.id);
+                        for (let res of Object.keys(ai.resources)) {
+                            let cost = rates[res] || 4;
+                            if (ai.resources[res] >= cost) {
+                                let missRes = Object.keys(ai.resources).find(r => ai.resources[r] === 0);
+                                if (missRes) {
+                                    ai.resources[res] -= cost; ai.resources[missRes] += 1;
+                                    logMessage(`🏦 ${ai.name} traded ${cost}x ${RESOURCE_TYPES[res].short} for 1x ${RESOURCE_TYPES[missRes].short}`);
+                                    G.lastAction = 'Port Traded ⚓';
+                                    actionTaken = true; updateUI(); break;
+                                }
+                            }
+                        }
+                    }
+                }
+                if (G.phase === 'MAIN' && G.players[G.activePlayerIdx].id === ai.id) {
+                    await delay(1200); 
+                    if (G.phase === 'MAIN' && G.players[G.activePlayerIdx].id === ai.id) {
+                        handleEndTurn();
+                    }
+                }
+            }
+        }
+
+        // --- INTERACTIVE MOUSE INTERFACE ---
+        function handleHoverMapping(e) {
+            if (G.players[G.activePlayerIdx]?.isAI || G.phase === 'ROLL' || G.phase === 'INIT_ROLL' || G.phase === 'GAME_OVER') { canvas.style.cursor = 'default'; hoverRemoveVert = -1; return; }
+            const pos = getMousePos(e);
+            
+            if (G.phase === 'ROBBER') {
+                let closestHex = G.hexes.findIndex(h => Math.hypot(h.x - pos.x, h.y - pos.y) < hexRadius);
+                canvas.style.cursor = (closestHex !== -1 && closestHex !== G.robberHexIndex && G.hexes[closestHex].type !== 'DESERT') ? 'crosshair' : 'default';
+                return;
+            }
+
+            let foundHover = -1;
+            let closestIdx = G.vertices.findIndex(v => Math.hypot(v.x - pos.x, v.y - pos.y) < G.interactionRadius);
+            
+            if (closestIdx !== -1) {
+                let v = G.vertices[closestIdx];
+                let isRemovableSetupVert = v.owner === G.activePlayerIdx && v.building === 'settlement' && G.phase === 'SETUP' && (G.buildMode === 'settlement' || (G.buildMode === 'road' && v.id === G.lastSetupVert));
+                if (isRemovableSetupVert) { 
+                    foundHover = closestIdx; canvas.style.cursor = 'pointer'; 
+                } 
+                else if (G.buildMode) { canvas.style.cursor = 'crosshair'; } 
+                else { canvas.style.cursor = 'default'; }
+            } else {
+                canvas.style.cursor = G.buildMode ? 'crosshair' : 'default';
+            }
+            if (hoverRemoveVert !== foundHover) { hoverRemoveVert = foundHover; render(); }
+        }
+
+        canvas.addEventListener('mousemove', handleHoverMapping);
+        canvas.addEventListener('touchmove', function(e) { 
+            if(e.cancelable) e.preventDefault(); 
+            handleHoverMapping(e); 
+        }, {passive: false});
+
+        function handleClickMapping(e) {
+            if (!G.players[G.activePlayerIdx] || G.players[G.activePlayerIdx].isAI || G.phase === 'GAME_OVER') return;
+            const pos = getMousePos(e);
+
+            if (G.phase === 'ROBBER') {
+                let closestHex = G.hexes.findIndex(h => Math.hypot(h.x - pos.x, h.y - pos.y) < hexRadius);
+                if (closestHex !== -1 && closestHex !== G.robberHexIndex && G.hexes[closestHex].type !== 'DESERT') {
+                    G.phase = 'ROBBER_RESOLVING';
+                    moveRobber(closestHex, G.activePlayerIdx);
+                }
+                return;
+            }
+            
+            if (hoverRemoveVert !== -1) { if (removeSettlement(hoverRemoveVert, G.activePlayerIdx)) updateUI(); return; }
+
+            if (G.buildMode === 'settlement' || G.buildMode === 'city') {
+                let closestIdx = G.vertices.findIndex(v => Math.hypot(v.x - pos.x, v.y - pos.y) < G.interactionRadius);
+                if (closestIdx !== -1) {
+                    if (G.buildMode === 'settlement') { if (executeBuildSettlement(closestIdx, G.activePlayerIdx)) updateUI(); }
+                    else { if (executeBuildCity(closestIdx, G.activePlayerIdx)) updateUI(); }
+                }
+            } 
+            else if (G.buildMode === 'road') {
+                let closestIdx = G.edges.findIndex(edge => {
+                    let v1 = G.vertices[edge.v1], v2 = G.vertices[edge.v2];
+                    return Math.hypot((v1.x + v2.x)/2 - pos.x, (v1.y + v2.y)/2 - pos.y) < G.interactionRadius;
+                });
+                if (closestIdx !== -1) { if (executeBuildRoad(closestIdx, G.activePlayerIdx)) updateUI(); }
+            }
+        }
+
+        canvas.addEventListener('click', handleClickMapping);
+        canvas.addEventListener('touchstart', function(e) {
+            if(e.cancelable) e.preventDefault();
+            handleHoverMapping(e); 
+            handleClickMapping(e);
+        }, {passive: false});
+
+        // --- RENDER PLATFORM ---
+        function render() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = '#102a43'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            G.hexes.forEach((hex, id) => {
+                ctx.save(); ctx.beginPath();
+                for (let i = 0; i < 6; i++) {
+                    let angle = (Math.PI / 3) * i - (Math.PI / 6);
+                    let vx = hex.x + hexRadius * Math.cos(angle), vy = hex.y + hexRadius * Math.sin(angle);
+                    if (i === 0) ctx.moveTo(vx, vy); else ctx.lineTo(vx, vy);
+                }
+                ctx.closePath();
+                ctx.fillStyle = RESOURCE_TYPES[hex.type].color; ctx.fill();
+                ctx.strokeStyle = '#222'; ctx.lineWidth = 2; ctx.stroke();
+                ctx.restore();
+
+                if (hex.token && id !== G.robberHexIndex) {
+                    ctx.beginPath(); ctx.arc(hex.x, hex.y, 18, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#fffdf0'; ctx.fill(); ctx.stroke();
+                    ctx.fillStyle = (hex.token === 6 || hex.token === 8) ? '#d32f2f' : '#111';
+                    ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillText(hex.token, hex.x, hex.y);
+                }
+                if (id === G.robberHexIndex) {
+                    ctx.beginPath(); ctx.arc(hex.x, hex.y, 22, 0, 2 * Math.PI);
+                    ctx.fillStyle = '#222'; ctx.fill(); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.stroke();
+                    ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    ctx.fillText('🥷', hex.x, hex.y);
+                }
+            });
+
+            G.edges.forEach(edge => {
+                if (edge.port) {
+                    let v1 = G.vertices[edge.v1], v2 = G.vertices[edge.v2];
+                    let midX = (v1.x + v2.x) / 2; let midY = (v1.y + v2.y) / 2;
+                    let dx = midX - centerX; let dy = midY - centerY;
+                    let len = Math.hypot(dx, dy);
+                    let px = midX + (dx/len) * 35; let py = midY + (dy/len) * 35; 
+                    
+                    ctx.save(); ctx.beginPath();
+                    ctx.moveTo(v1.x, v1.y); ctx.lineTo(px, py);
+                    ctx.moveTo(v2.x, v2.y); ctx.lineTo(px, py);
+                    ctx.strokeStyle = '#8b5a2b'; ctx.lineWidth = 4; ctx.stroke();
+                    ctx.restore();
+
+                    ctx.save();
+                    ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif';
+                    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+                    let text = edge.port === '3:1' ? '⚓ 3:1' : `⚓ ${RESOURCE_TYPES[edge.port].short} 2:1`;
+                    
+                    let m = ctx.measureText(text);
+                    ctx.fillStyle = 'rgba(0,0,0,0.7)';
+                    ctx.fillRect(px - m.width/2 - 6, py - 12, m.width + 12, 24);
+                    
+                    ctx.fillStyle = '#fff';
+                    ctx.fillText(text, px, py);
+                    ctx.restore();
+                }
+
+                if (edge.owner !== null) {
+                    let v1 = G.vertices[edge.v1], v2 = G.vertices[edge.v2];
+                    ctx.save(); ctx.beginPath(); ctx.moveTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y);
+                    ctx.strokeStyle = G.players[edge.owner].color; ctx.lineWidth = 6; ctx.lineCap = 'round'; ctx.stroke(); ctx.restore();
+                }
+            });
+
+            G.vertices.forEach(v => {
+                if (v.building !== null) {
+                    ctx.save(); ctx.fillStyle = G.players[v.owner].color; ctx.strokeStyle = '#fff'; ctx.lineWidth = 1.5;
+                    if (v.building === 'settlement') { ctx.beginPath(); ctx.rect(v.x - 6, v.y - 6, 12, 12); ctx.fill(); ctx.stroke(); } 
+                    else if (v.building === 'city') { ctx.beginPath(); ctx.arc(v.x, v.y, 10, 0, 2 * Math.PI); ctx.fill(); ctx.stroke(); }
+                    ctx.restore();
+                }
+            });
+
+            if (!G.players[G.activePlayerIdx]?.isAI) {
+                ctx.save();
+                if (G.phase === 'ROBBER') {
+                    G.hexes.forEach((hex, id) => {
+                        if (id !== G.robberHexIndex && hex.type !== 'DESERT') {
+                            ctx.beginPath(); ctx.arc(hex.x, hex.y, 20, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255, 0, 0, 0.4)'; ctx.fill();
+                        }
+                    });
+                }
+                
+                // Draw yellow/orange build mode highlights WITHOUT suppressing them during an undo hover!
+                if (G.buildMode) {
+                    if (G.buildMode === 'settlement' || G.buildMode === 'city') {
+                        G.vertices.forEach((v, id) => {
+                            if ((G.buildMode === 'settlement' && isValidSettlement(id, G.activePlayerIdx, G.phase === 'SETUP')) ||
+                                (G.buildMode === 'city' && v.owner === G.activePlayerIdx && v.building === 'settlement')) {
+                                ctx.beginPath(); ctx.arc(v.x, v.y, 8, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255, 235, 59, 0.6)'; ctx.fill();
+                            }
+                        });
+                    } else if (G.buildMode === 'road') {
+                        G.edges.forEach((e, id) => {
+                            if (isValidRoad(id, G.activePlayerIdx, G.phase === 'SETUP' ? { lastVert: G.lastSetupVert } : false)) {
+                                let v1 = G.vertices[e.v1], v2 = G.vertices[e.v2];
+                                // Draw a highly visible thick orange line over the edge
+                                ctx.beginPath(); ctx.moveTo(v1.x, v1.y); ctx.lineTo(v2.x, v2.y);
+                                ctx.strokeStyle = 'rgba(255, 152, 0, 0.7)'; ctx.lineWidth = 8; ctx.lineCap = 'round'; ctx.stroke();
+                                // With an orange dot in the middle
+                                ctx.beginPath(); ctx.arc((v1.x + v2.x)/2, (v1.y + v2.y)/2, 6, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(255, 152, 0, 0.9)'; ctx.fill();
+                            }
+                        });
+                    }
+                }
+                
+                // Draw the undo 'X' completely independently so it overlays
+                if (hoverRemoveVert !== -1) {
+                    let v = G.vertices[hoverRemoveVert];
+                    ctx.beginPath(); ctx.arc(v.x, v.y, 14, 0, 2 * Math.PI); ctx.fillStyle = 'rgba(244, 67, 54, 0.85)'; ctx.fill();
+                    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 16px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('X', v.x, v.y);
+                } 
+                ctx.restore();
+            }
+        }
+
+        // --- DOM MANIPULATIONS / HUD UPDATE ---
+        function updateUI() {
+            let activePlayer = G.players[G.activePlayerIdx];
+            if (!activePlayer) return;
+
+            let banner = document.getElementById('status-banner');
+            if (G.phase === 'GAME_OVER') {
+                banner.innerText = `🏆 GAME OVER`;
+                banner.className = '';
+            } else if (G.phase === 'INIT_ROLL') {
+                banner.innerText = `🎲 SETUP: Rolling for turn order...`;
+                banner.className = '';
+            } else if (G.phase === 'SETUP') {
+                banner.innerText = `⚙️ SETUP: ${activePlayer.name} - Placing ${G.buildMode === 'settlement' ? 'Town' : 'Road'}`;
+                banner.className = (!activePlayer.isAI ? 'action-required' : '');
+            } else if (G.phase === 'ROLL') {
+                banner.innerText = `🎲 ${activePlayer.name}'s Turn - Waiting to roll`;
+                banner.className = (!activePlayer.isAI ? 'action-required' : '');
+            } else if (G.phase === 'ROBBER' || G.phase === 'ROBBER_RESOLVING') {
+                banner.innerText = `🥷 ACTION: ${activePlayer.name} must move Robber!`;
+                banner.className = (!activePlayer.isAI ? 'action-required' : '');
+            } else {
+                let actionStr = G.lastAction ? ` - ${G.lastAction}` : '';
+                let modeStr = G.buildMode ? ` [Placing ${G.buildMode === 'settlement' ? 'Town' : (G.buildMode === 'road' ? 'Road' : 'City')}]` : '';
+                banner.innerText = `🚀 ${activePlayer.name}${actionStr}${modeStr} ${G.freeRoads > 0 ? `(Free Roads: ${G.freeRoads})` : ''}`;
+                banner.className = (!activePlayer.isAI && G.freeRoads === 0 && !G.buildMode ? 'action-required' : '');
+            }
+
+            let isHumanMain = (!activePlayer.isAI && G.phase === 'MAIN');
+            
+            let rollBtn = document.getElementById('roll-btn');
+            rollBtn.disabled = (activePlayer.isAI || G.phase !== 'ROLL');
+
+            let endTurnBtn = document.getElementById('end-turn-btn');
+            endTurnBtn.disabled = (!isHumanMain);
+            endTurnBtn.innerText = (isHumanMain && G.freeRoads > 0) ? 'End Turn (Forfeit Roads)' : 'End Turn';
+
+            document.getElementById('build-road-btn').disabled = !(isHumanMain && (canAfford(activePlayer, COSTS.road) || G.freeRoads > 0));
+            document.getElementById('build-settlement-btn').disabled = !(isHumanMain && canAfford(activePlayer, COSTS.settlement) && G.freeRoads === 0);
+            document.getElementById('build-city-btn').disabled = !(isHumanMain && canAfford(activePlayer, COSTS.city) && G.vertices.some(v => v.owner === activePlayer.id && v.building === 'settlement') && G.freeRoads === 0);
+            document.getElementById('dev-card-btn').disabled = !(isHumanMain && canAfford(activePlayer, COSTS.devCard) && G.devDeck.length > 0 && G.freeRoads === 0);
+            
+            document.getElementById('open-trade-btn').disabled = !isHumanMain;
+            updateBankTradeUI();
+
+            // Clear and sort into separated panels for cleaner mobile/desktop views
+            let humanPanel = document.getElementById('human-player-panel');
+            let otherPanel = document.getElementById('other-players-panel');
+            humanPanel.innerHTML = '';
+            otherPanel.innerHTML = '';
+
+            G.players.forEach((p, idx) => {
+                let row = document.createElement('div');
+                row.className = `player-row ${idx === G.activePlayerIdx ? 'active' : ''}`;
+                
+                let resHTML = ''; let devHTML = ''; let achHTML = '';
+                
+                if (G.longestRoadPlayer === p.id) achHTML += `<span>🛤️ Longest Road</span> `;
+                if (G.largestArmyPlayer === p.id) achHTML += `<span>🛡️ Largest Army</span>`;
+                if (achHTML !== '') achHTML = `<div class="achievements">${achHTML}</div>`;
+
+                let displayScore = p.isAI ? p.publicVPs : p.victoryPoints;
+
+                if (p.isAI) {
+                    let totalRes = Object.values(p.resources).reduce((a, b) => a + b, 0);
+                    let devCount = Object.values(p.devCards).reduce((a,b)=>a+b,0) + Object.values(p.newDevCards).reduce((a,b)=>a+b,0);
+                    resHTML = `<div class="ai-stats"><span>📦 Cards: <strong>${totalRes}</strong></span><span>🃏 Devs: <strong>${devCount}</strong></span></div>`;
+                } else {
+                    resHTML = `
+                        <div class="resource-grid human-cards">
+                            <div class="res-badge" style="background:${RESOURCE_TYPES.WOOD.color}">🪵 ${p.resources.WOOD}</div>
+                            <div class="res-badge" style="background:${RESOURCE_TYPES.BRICK.color}">🧱 ${p.resources.BRICK}</div>
+                            <div class="res-badge" style="background:${RESOURCE_TYPES.WHEAT.color}">🌾 ${p.resources.WHEAT}</div>
+                            <div class="res-badge" style="background:${RESOURCE_TYPES.SHEEP.color}">🐑 ${p.resources.SHEEP}</div>
+                            <div class="res-badge" style="background:${RESOURCE_TYPES.ORE.color}">🪨 ${p.resources.ORE}</div>
+                        </div>`;
+                    
+                    let devKeys = Object.keys(DEV_TYPES);
+                    let hasAnyCards = devKeys.some(k => p.devCards[k] > 0 || p.newDevCards[k] > 0);
+                    
+                    if(hasAnyCards) {
+                        devHTML += `<div class="dev-card-tracker">`;
+                        devKeys.forEach(k => {
+                            let oldC = p.devCards[k];
+                            let newC = p.newDevCards[k];
+                            let totalC = oldC + newC;
+                            if (totalC > 0) {
+                                // Strictly check if it's the human's turn before lighting the play button
+                                let isHumanTurn = (!p.isAI && G.activePlayerIdx === p.id);
+                                let isPlayable = (isHumanTurn && (G.phase === 'MAIN' || G.phase === 'ROLL') && !G.devCardPlayedThisTurn && k !== 'VP' && oldC > 0) ? '' : 'disabled';
+                                
+                                let btnText = 'Play';
+                                if (k === 'VP') btnText = 'Passive';
+                                else if (oldC === 0 && newC > 0) btnText = 'Wait 1 Turn';
+
+                                devHTML += `<div class="dev-row">
+                                    <span>${DEV_TYPES[k].name} (x${totalC})</span>
+                                    ${k!=='VP' ? `<button type="button" class="play-btn" onclick="playDevCard('${k}', ${p.id})" ${isPlayable}>${btnText}</button>` : `<span style="font-size:0.8rem; color:#888;">Passive</span>`}
+                                </div>`;
+                            }
+                        });
+                        devHTML += `</div>`;
+                    }
+                }
+                
+                row.innerHTML = `<div class="player-header"><span class="player-name" style="color: ${p.color};">${p.name}</span><span class="player-score">🏆 ${displayScore}/${G.vpGoal}</span></div>${achHTML}${resHTML}${devHTML}`;
+                
+                if (p.isAI) {
+                    otherPanel.appendChild(row);
+                } else {
+                    humanPanel.appendChild(row);
+                }
+            });
+            render();
+        }
+
+        function populateTradeMenus() {
+            let giveSelect = document.getElementById('trade-give'), getSelect = document.getElementById('trade-get');
+            giveSelect.innerHTML = ''; getSelect.innerHTML = ''; 
+
+            Object.keys(RESOURCE_TYPES).forEach(k => {
+                if(k === 'DESERT') return;
+                let optStr = `<option value="${k}">${RESOURCE_TYPES[k].short} ${RESOURCE_TYPES[k].name}</option>`;
+                giveSelect.insertAdjacentHTML('beforeend', optStr); getSelect.insertAdjacentHTML('beforeend', optStr);
+            });
+        }
+
+        function startNewLogTurnBlock(playerName) {
+            let log = document.getElementById('log-container');
+            let block = document.createElement('div');
+            block.className = 'turn-block';
+            block.innerHTML = `<div class="turn-block-header">${playerName}</div>`;
+            log.prepend(block);
+            G.currentTurnBlock = block;
+        }
+
+        function logMessage(msg, important = false, success = false) {
+            if (!G.currentTurnBlock) return;
+            let entry = document.createElement('div');
+            entry.className = `log-entry ${important ? 'important' : ''} ${success ? 'success' : ''}`;
+            entry.innerHTML = `• ${msg}`;
+            G.currentTurnBlock.appendChild(entry);
+        }
+    </script>
+</body>
+</html>
